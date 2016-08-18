@@ -1,0 +1,26 @@
+{
+  "name": "glitchball",
+  "version": "1.0.0",
+  "description": "Football-esque game with glitching",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --ignore build/ --exec uglifyjs --compress --mangle -o build/out.js --source-map build/out.js.map -- src/*.js",
+    "serve": "http-server build/",
+    "publish": "gh-pages -d build/"
+  },
+  "keywords": [
+    "game",
+    "football"
+  ],
+  "author": "Vasuman",
+  "license": "ISC",
+  "dependencies": {
+    "glob": "^7.0.5",
+    "uglify-js": "^2.7.2"
+  },
+  "devDependencies": {
+    "gh-pages": "^0.11.0",
+    "http-server": "^0.9.0",
+    "nodemon": "^1.10.0"
+  }
+}
