@@ -1,0 +1,2 @@
+function main(){graphics.init(document.getElementById("main")),loop.start()}var graphics=function(){function n(n){c=document.createElement("canvas"),c.width=e,c.height=a,o=c.getContext("2d"),n.appendChild(c)}function t(n,t,i,e){o.fillRect(n,t,i,e)}function i(){o.clearRect(0,0,e,a)}const e=800,a=600;var c,o;return{init:n,box:t,clear:i}}(),loop=function(){function n(){t()}function t(){graphics.clear(),graphics.box(e++,10,10,10),i=window.requestAnimationFrame(t)}var i,e=0;return{start:n}}();window.addEventListener("load",main);
+//# sourceMappingURL=build/out.js.map
