@@ -1,18 +1,45 @@
+/* exported loop */
+/* global layers, reducer, World */
+
 var loop = (function() {
-  var handle;
-  var i = 0;
+  var running;
+  var world;
+  var inputs;
 
   function start() {
+    running = true;
+    inputs = {
+      player: [],
+      other: []
+    };
+    world = new World();
+
     tick();
   }
 
+  function stop() {
+    running = false;
+  }
+
   function tick() {
-    graphics.clear();
-    graphics.box(i++, 10, 10, 10);
-    handle = window.requestAnimationFrame(tick);
+    populateInput();
+
+    // update
+    reducer(world, inputs);
+
+    // draw
+    layers.draw();
+
+    if (running) {
+      window.requestAnimationFrame(tick);
+    }
+  }
+
+  function populateInput() {
   }
 
   return {
-    start: start
-  };
+    start: start,
+    stop: stop
+  }
 })();
