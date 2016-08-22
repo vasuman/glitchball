@@ -4,7 +4,8 @@
   "description": "Football-esque game with glitching",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --ignore build/ --exec uglifyjs --compress --mangle -o build/out.js --source-map build/out.js.map -- src/*.js",
+    "lint": "eslint -c .eslintrc.json src/",
+    "dev": "nodemon --ignore build/ --exec uglifyjs -b -o build/out.js -- src/*.js",
     "serve": "http-server build/",
     "publish": "gh-pages -d build/"
   },

@@ -1,19 +1,15 @@
 /* exported loop */
-/* global layers, reducer, World */
+/* global input, renderer, World */
 
 var loop = (function() {
   var running;
   var world;
-  var inputs;
+  var events = [];
 
   function start() {
     running = true;
-    inputs = {
-      player: [],
-      other: []
-    };
-    world = new World();
-
+    world = new World(1000, 600);
+    world.initial();
     tick();
   }
 
@@ -22,20 +18,21 @@ var loop = (function() {
   }
 
   function tick() {
-    populateInput();
-
+    populateEvents();
     // update
-    reducer(world, inputs);
-
+    world.process(events);
+    world.step(1 / 60);
     // draw
-    layers.draw();
-
+    renderer.draw(world);
     if (running) {
       window.requestAnimationFrame(tick);
     }
   }
 
-  function populateInput() {
+  function populateEvents() {
+    events.splice(0, events.length);
+    // poll input
+    Array.prototype.push.apply(events, input.poll());
   }
 
   return {
