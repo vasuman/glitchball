@@ -1,9 +1,8 @@
 /* exported input, InputAction, InputTarget */
 /* global EventType, Direction */
 
-
 var SHIFT_KEY = 16;
-var SPACE_KEY = 32;
+var ENTER_KEY = 13;
 
 var ARROW_KEY_MAP = {
   38: Direction.UP,
@@ -19,24 +18,15 @@ var WSAD_KEY_MAP = {
   68: Direction.RIGHT
 };
 
-var oneKeyMap = {
-  move: WSAD_KEY_MAP,
-  glitch: SHIFT_KEY
-};
-
-var twoKeyMap = {
-  move: ARROW_KEY_MAP,
-  glitch: SPACE_KEY
-};
-
 var InputAction = {
   MOVE: 1,
-  GLITCH: 2
+  GLITCH_START: 2,
+  GLITCH_END: 3
 };
 
 var InputTarget = {
-  ONE: 1,
-  TWO: 2
+  ONE: 0,
+  TWO: 1
 };
 
 function MoveEvent(target, direction) {
@@ -46,10 +36,31 @@ function MoveEvent(target, direction) {
   this.direction = direction;
 }
 
+function GlitchEvent(target, start) {
+  this.type = EventType.INPUT;
+  this.action = start ? InputAction.GLITCH_START : InputAction.GLITCH_END;
+  this.target = target;
+}
+
 var input = (function() {
+
+  var oneKeyMap = {
+    move: WSAD_KEY_MAP,
+    glitch: SHIFT_KEY
+  };
+
+  var twoKeyMap = {
+    move: ARROW_KEY_MAP,
+    glitch: ENTER_KEY
+  };
+
+  var targets = [InputTarget.ONE, InputTarget.TWO];
+  var maps = [oneKeyMap, twoKeyMap];
 
   var pending = [];
   var events = [];
+
+  var glitching = {};
 
   // pressed keys
   var isPressed = {
@@ -59,16 +70,25 @@ var input = (function() {
     elt.addEventListener('keydown', function(e) {
       var code = e.keyCode;
       if (!isPressed[code]) {
+        console.log(code);
         isPressed[code] = true;
-        if (code === oneKeyMap.glitch) {
-          code.x();
-        } else if (code === twoKeyMap.glitch) {
-          code.x();
-        }
+        targets.forEach(function(target) {
+          if (!glitching[target] && code === maps[target].glitch) {
+            glitching[target] = true;
+            pending.push(new GlitchEvent(target, true));
+          }
+        });
       }
     });
     elt.addEventListener('keyup', function(e) {
-      delete isPressed[e.keyCode];
+      var code = e.keyCode;
+      delete isPressed[code];
+      targets.forEach(function(target) {
+        if (glitching[target] && code === maps[target].glitch) {
+          glitching[target] = false;
+          pending.push(new GlitchEvent(target, false));
+        }
+      });
     });
   }
 
@@ -76,15 +96,15 @@ var input = (function() {
     var key;
     var dir;
     events.splice(0, events.length);
+    Array.prototype.push.apply(events, pending);
     pending.splice(0, pending.length);
     for (key in isPressed) {
-      if (oneKeyMap.move.hasOwnProperty(key)) {
-        dir = oneKeyMap.move[key];
-        events.push(new MoveEvent(InputTarget.ONE, dir));
-      } else if (twoKeyMap.move.hasOwnProperty(key)) {
-        dir = twoKeyMap.move[key];
-        events.push(new MoveEvent(InputTarget.TWO, dir));
-      }
+      targets.forEach(function (target) {
+        if (maps[target].move.hasOwnProperty(key)) {
+          dir = maps[target].move[key];
+          events.push(new MoveEvent(target, dir));
+        }
+      });
     }
     return events;
   }

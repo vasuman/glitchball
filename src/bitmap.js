@@ -4,8 +4,7 @@
 function Bitmap(width, height) {
   this.can = document.createElement('canvas');
   this.ctx = this.can.getContext('2d');
-  this.width = this.can.width = width;
-  this.height = this.can.height = height;
+  this.resize(width, height);
 }
 
 Bitmap.prototype.drawBox = function(b) {
@@ -18,6 +17,18 @@ Bitmap.prototype.drawCircle = function(p, r) {
   this.ctx.fill();
 }
 
+Bitmap.prototype.drawLine = function(s, e) {
+  this.ctx.beginPath();
+  this.ctx.moveTo(s.x, s.y);
+  this.ctx.lineTo(e.x, e.y);
+  this.ctx.stroke();
+}
+
 Bitmap.prototype.clear = function() {
   this.ctx.clearRect(0, 0, this.width, this.height);
+}
+
+Bitmap.prototype.resize = function(width, height) {
+  this.width = this.can.width = width;
+  this.height = this.can.height = height;
 }
