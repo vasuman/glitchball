@@ -1,6 +1,8 @@
 /* exported EventType, World */
-/* global InputAction, InputTarget, Body, Box */
+/* global InputAction, InputTarget, Body, Box, V */
 
+var MAX_CHARGE = 500;
+var DISCHARGE_RATIO = 5;
 var SIDE_MARGIN = 50;
 var ACC_FACTOR = 350;
 var ENT_SIZE = 10;
@@ -11,29 +13,38 @@ var EventType = {
 };
 
 var GameState = {
-  PLAY: 1,
+  FREE: 1,
   GLITCH: 2
 };
 
 /**
  * Encapsulates the state of the match.
  */
-function World(width, height) {
+function World(width, height, goalSize) {
   this.tick = 0;
   this.arena = new Box(0, 0, width, height);
   this.one = {
     left: true,
-    body: new Body()
+    charge: 0,
+    body: new Body(),
+    score: 0
   };
   this.two = {
     left: false,
-    body: new Body()
+    charge: 0,
+    body: new Body(),
+    score: 0
   };
   this.ball = {
     body: new Body(),
     attached: false
   };
-  this.state = GameState.PLAY;
+  this.state = GameState.FREE;
+  this.glitch = {
+    target: null,
+    pointer: new V()
+  };
+  this.goalSize = goalSize;
   this._players = [this.one, this.two];
   this._entities = [this.ball, this.two, this.one];
   this.one.body.bounds.setDim(ENT_SIZE, ENT_SIZE);
@@ -62,44 +73,73 @@ World.prototype.step = function(delT) {
   var ball = this.ball;
   var pos;
   var other;
-
   this.tick += 1;
-  this._players.forEach(function(player) {
-    player.body.acc.normalize();
-    player.body.acc.scale(ACC_FACTOR);
-    player.body.update(delT);
-  });
-
-  if (ball.attached) {
-    pos = ball.attached.body.pos;
-    ball.body.at(pos.x, pos.y);
-    other = ball.attached === this.one ? this.two : this.one;
-    if (other.body.bounds.intersects(ball.body.bounds)) {
-      // kill attached
-      this._doSpawn(ball.attached);
-      this._doSpawn(other);
-      // switch attached
-      ball.attached = false;
+  if (this.state === GameState.FREE) {
+    this._players.forEach(function(player) {
+      if (player.charge < MAX_CHARGE) {
+        player.charge += 1;
+      }
+      player.body.acc.normalize();
+      player.body.acc.scale(ACC_FACTOR);
+      player.body.update(delT);
+    });
+    if (ball.attached) {
+      pos = ball.attached.body.pos;
+      ball.body.at(pos.x, pos.y);
+      other = ball.attached === this.one ? this.two : this.one;
+      if (other.body.bounds.intersects(ball.body.bounds)) {
+        // kill attached
+        this._doSpawn(ball.attached);
+        this._doSpawn(other);
+        // switch attached
+        ball.attached = false;
+      }
+    } else {
+      ball.body.update(delT);
+      this._players.forEach(function(player) {
+        if (player.body.bounds.intersects(ball.body.bounds)) {
+          ball.attached = player;
+        }
+      });
+    }
+    this._entities.forEach(function(ent) {
+      ent.body.update(delT);
+    });
+  } else if (this.state === GameState.GLITCH) {
+    this.glitch.target.charge -= DISCHARGE_RATIO;
+    if (this.glitch.target.charge === 0) {
+      console.log('too long');
     }
   } else {
-    ball.body.update(delT);
-    this._players.forEach(function(player) {
-      if (player.body.bounds.intersects(ball.body.bounds)) {
-        ball.attached = player;
-      }
-    });
+    throw new Error('unknown state');
   }
-
-  this._entities.forEach(function(ent) {
-    ent.body.update(delT);
-  });
 }
 
 World.prototype.handleInput = function(inputEvent) {
   var target = this._getTarget(inputEvent.target);
   switch (inputEvent.action) {
       case InputAction.MOVE:
-          target.body.acc.fromDirection(inputEvent.direction);
+          if (this.state === GameState.FREE) {
+            target.body.acc.fromDirection(inputEvent.direction);
+          } else if (this.state === GameState.GLITCH
+                     && target === this.glitch.target) {
+            this.glitch.pointer.fromDirection(inputEvent.direction);
+          }
+          break;
+      case InputAction.GLITCH_START:
+          if (this.state === GameState.FREE) {
+            this.state = GameState.GLITCH;
+            this.glitch.target = target;
+            this.glitch.pointer.from(target.body.pos);
+          }
+          break;
+      case InputAction.GLITCH_END:
+          if (this.state === GameState.GLITCH && target === this.glitch.target) {
+            // TODO: check pointer within bounds
+            this.glitch.target.body.pos.from(this.glitch.pointer);
+            this.glitch.target = null;
+            this.state = GameState.FREE;
+          }
           break;
       default:
           throw new Error('unknown action');
