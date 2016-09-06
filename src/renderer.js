@@ -37,14 +37,14 @@ var renderer = (function() {
     clearLayers();
     base.ctx.globalAlpha = 0.8;
     base.ctx.globalAlpha = 1;
-    drawEnt(world.one, 'blue');
-    drawEnt(world.two, 'red');
+    drawEnt(world.players[0], 'blue');
+    drawEnt(world.players[1], 'red');
     drawBall(world.ball);
     if (world.state == GameState.GLITCH) {
       drawGlitch(world);
     }
-    drawScore(world.one.score, true);
-    drawScore(world.two.score, false);
+    drawScore(world.players[0].score, true);
+    drawScore(world.players[1].score, false);
     screen.ctx.drawImage(bg.can, 0, 0);
     screen.ctx.drawImage(base.can, 0, 0);
     screen.ctx.drawImage(hud.can, 0, 0);

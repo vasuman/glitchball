@@ -22,6 +22,11 @@ V.prototype.add = function(o) {
   this.y += o.y;
 }
 
+V.prototype.sub = function(o) {
+  this.x -= o.x;
+  this.y -= o.y;
+}
+
 V.prototype.fAdd = function(f, o) {
   this.x += f * o.x;
   this.y += f * o.y;
@@ -70,6 +75,22 @@ V.prototype.normalize = function() {
   }
 }
 
+V.prototype.limit = function(b, pad) {
+  this.x = Math.max(Math.min(this.x, b.x + b.w - pad), b.x + pad);
+  this.y = Math.max(Math.min(this.y, b.y + b.h - pad), b.y + pad);
+}
+
+V.prototype.clear = function() {
+  this.x = this.y = 0;
+}
+
+/*
+ * Describes a box.
+ * @param {Number} x Left.
+ * @param {Number} y Top.
+ * @param {Number} w Width.
+ * @param {Number} h Height.
+ */
 function Box(x, y, w, h) {
   this.x = x || 0;
   this.y = y || 0;

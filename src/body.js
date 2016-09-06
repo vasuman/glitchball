@@ -1,7 +1,7 @@
 /* exported Body */
 /* global Box, V */
 
-var DAMPENING = 0.95;
+var DAMPENING = 0.955;
 
 function Body() {
   this.bounds = new Box();
@@ -15,7 +15,7 @@ Body.prototype.update = function(delT) {
   this.pos.fAdd(delT, this.vel);
 
   this.vel.scale(DAMPENING);
-  this.acc.set(0, 0);
+  this.acc.clear();
 
   this._reBound();
 }
@@ -23,6 +23,11 @@ Body.prototype.update = function(delT) {
 Body.prototype.at = function(x, y) {
   this.pos.set(x, y);
   this._reBound();
+}
+
+Body.prototype.stop = function() {
+  this.vel.clear();
+  this.acc.clear();
 }
 
 Body.prototype._reBound = function() {
