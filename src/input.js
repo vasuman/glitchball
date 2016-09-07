@@ -70,7 +70,6 @@ var input = (function() {
     elt.addEventListener('keydown', function(e) {
       var code = e.keyCode;
       if (!isPressed[code]) {
-        console.log(code);
         isPressed[code] = true;
         targets.forEach(function(target) {
           if (!glitching[target] && code === maps[target].glitch) {

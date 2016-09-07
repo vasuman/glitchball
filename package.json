@@ -5,8 +5,9 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint -c .eslintrc.json src/",
-    "dev": "nodemon --ignore build/ --exec uglifyjs -b -o build/out.js -- src/*.js",
+    "dev": "uglifyjs -b -o build/out.js -- src/*.js",
     "serve": "http-server build/",
+    "watch": "nodemon --ignore build/ --exec npm run dev",
     "publish": "gh-pages -d build/"
   },
   "keywords": [
