@@ -2,15 +2,49 @@
 /* global InputAction, InputTarget, Body, Box, V */
 
 var MAX_CHARGE = 500;
+var GLITCH_MIN_CHARGE = 100;
 var DISCHARGE_RATIO = 5;
 var SIDE_MARGIN = 50;
 var ACC_FACTOR = 450;
-var ENT_SIZE = 10;
-var BALL_SIZE = 10;
+var PLAYER_SIZE = 40;
+var BALL_SIZE = 50;
+var GLITCH_PAD = 10;
 
 var EventType = {
   INPUT: 1
 };
+
+var PlayerState = {
+  SEEK: 1,
+  DEFEND: 2,
+  ATTACK: 3
+};
+
+function Player(left) {
+  this.left = left;
+  this.charge = MAX_CHARGE;
+  this.body = new Body(PLAYER_SIZE);
+  this.score = 0;
+  this.state = PlayerState.SEEK;
+}
+
+Player.prototype.moveIn = function(dir) {
+  this.body.acc.fromDirection(dir);
+}
+
+Player.prototype.discharge = function() {
+  this.charge -= DISCHARGE_RATIO;
+  return this.charge <= 0;
+}
+
+Player.prototype.update = function() {
+    if (this.charge < MAX_CHARGE) {
+      this.charge += 1;
+    }
+    this.body.acc.normalize();
+    this.body.acc.scale(ACC_FACTOR);
+    this.body.update();
+}
 
 var GameState = {
   FREE: 1,
@@ -23,10 +57,6 @@ var GameState = {
 function World(width, height, goalSize) {
   this.tick = 0;
   this.arena = new Box(0, 0, width, height);
-  this.ball = {
-    body: new Body(),
-    attached: false
-  };
   this.state = GameState.FREE;
   this.glitch = {
     target: null,
@@ -34,25 +64,10 @@ function World(width, height, goalSize) {
     delta: new V()
   };
   this.goalSize = goalSize;
-  var one = {
-    left: true,
-    charge: 0,
-    body: new Body(),
-    score: 0
-  };
-  var two = {
-    left: false,
-    charge: 0,
-    body: new Body(),
-    score: 0
-  };
-  this.players = [one, two];
 }
 
-World.prototype.initial = function() {
-  this.players[0].body.bounds.setDim(ENT_SIZE, ENT_SIZE);
-  this.players[1].body.bounds.setDim(ENT_SIZE, ENT_SIZE);
-  this.ball.body.bounds.setDim(BALL_SIZE, BALL_SIZE);
+World.prototype.init = function() {
+  this._initEntities();
   this._newRound(true);
 }
 
@@ -69,85 +84,42 @@ World.prototype.process = function(events) {
   });
 }
 
-World.prototype.step = function(delT) {
+World.prototype.step = function() {
   this.tick += 1;
   if (this.state === GameState.FREE) {
-    for (var i = 0; i < this.players.length; i++) {
-      var player = this.players[i];
-      if (player.charge < MAX_CHARGE) {
-        player.charge += 1;
-      }
-      player.body.acc.normalize();
-      player.body.acc.scale(ACC_FACTOR);
-      player.body.update(delT);
-      if (!this.arena.contains(player.body.bounds)) {
-        if (this.ball.attached === player) {
-          this.ball.attached = false;
-          // push to center;
-          this.arena.center(this.ball.body.acc);
-          this.ball.body.acc.sub(this.ball.body.pos);
-          this.ball.body.acc.scale(10);
-        }
-        this._doSpawn(player);
-      }
-    }
-    if (this.ball.attached) {
-      var pos = this.ball.attached.body.pos;
-      this.ball.body.at(pos.x, pos.y);
-      var other = this._getOther(this.ball.attached);
-      if (other.body.bounds.intersects(this.ball.body.bounds)) {
-        // kill attached
-        this._doSpawn(this.ball.attached);
-        // kill attacher
-        this._doSpawn(other);
-        this.ball.attached = false;
-      }
-    } else {
-      this.ball.body.update(delT);
-      for (var i = 0; i < this.players.length; i++) {
-        var player = this.players[i];
-        if (player.body.bounds.intersects(this.ball.body.bounds)) {
-          this.ball.attached = player;
-        }
-      }
-    }
+    this._updatePlayers();
+    this._updateBall();
   } else if (this.state === GameState.GLITCH) {
-    this.glitch.target.charge -= DISCHARGE_RATIO;
-    if (this.glitch.target.charge === 0) {
-      console.log('too long');
-    }
-    this.glitch.delta.normalize();
-    this.glitch.pointer.add(this.glitch.delta);
-    this.glitch.pointer.limit(this.arena, ENT_SIZE);
-    this.glitch.delta.clear();
+    this._updateGlitch();
   } else {
     throw new Error('unknown state');
   }
 }
 
 World.prototype.handleInput = function(inputEvent) {
-  var target = this._getTarget(inputEvent.target);
+  var target = this._getTarget(inputEvent.source);
   switch (inputEvent.action) {
       case InputAction.MOVE:
           if (this.state === GameState.FREE) {
-            target.body.acc.fromDirection(inputEvent.direction);
-          } else if (this.state === GameState.GLITCH
-                     && target === this.glitch.target) {
-            this.glitch.delta.fromDirection(inputEvent.direction);
+            target.moveIn(inputEvent.direction);
+          } else if (this.state === GameState.GLITCH) {
+            if (target === this.glitch.target) {
+              this.glitch.delta.fromDirection(inputEvent.direction);
+            }
           }
           break;
       case InputAction.GLITCH_START:
           if (this.state === GameState.FREE) {
-            this.state = GameState.GLITCH;
-            this.glitch.target = target;
-            this.glitch.pointer.from(target.body.pos);
+            if (target.charge > GLITCH_MIN_CHARGE) {
+              this._startGlitch(target);
+            }
           }
           break;
       case InputAction.GLITCH_END:
-          if (this.state === GameState.GLITCH && target === this.glitch.target) {
-            this.glitch.target.body.pos.from(this.glitch.pointer);
-            this.glitch.target = null;
-            this.state = GameState.FREE;
+          if (this.state === GameState.GLITCH) {
+            if (target === this.glitch.target) {
+              this._endGlitch(target);
+            }
           }
           break;
       default:
@@ -155,15 +127,79 @@ World.prototype.handleInput = function(inputEvent) {
   }
 }
 
-World.prototype._getTarget = function(target) {
-  switch (target) {
-      case InputTarget.ONE:
-          return this.players[0];
-      case InputTarget.TWO:
-          return this.players[1];
-      default:
-          throw new Error('unknown target');
+World.prototype._initEntities = function() {
+  this.players = [new Player(true), new Player(false)];
+  this.ball = {
+    body: new Body(BALL_SIZE),
+    attached: false
+  };
+}
+
+World.prototype._updatePlayers = function() {
+  for (var i = 0; i < this.players.length; i++) {
+    var player = this.players[i];
+    player.update();
+    // kill out of bounds player
+    if (!this.arena.contains(player.body.bounds)) {
+      if (this.ball.attached === player) {
+        this.ball.attached = false;
+      }
+      this._doSpawn(player);
+    }
   }
+}
+
+World.prototype._updateBall = function() {
+  if (this.ball.attached) {
+    var pos = this.ball.attached.body.pos;
+    this.ball.body.at(pos.x, pos.y);
+    var other = this._getOther(this.ball.attached);
+    if (other.body.bounds.intersects(this.ball.body.bounds)) {
+      // kill attached
+      this._doSpawn(this.ball.attached);
+      // kill attacker
+      this._doSpawn(other);
+      this.ball.attached = false;
+    }
+  } else {
+    // gravitate toward center
+    this.arena.center(this.ball.body.acc);
+    this.ball.body.acc.sub(this.ball.body.pos);
+    this.ball.body.update();
+    for (var i = 0; i < this.players.length; i++) {
+      var player = this.players[i];
+      if (player.body.bounds.intersects(this.ball.body.bounds)) {
+        this.ball.attached = player;
+      }
+    }
+  }
+}
+
+World.prototype._startGlitch = function(target) {
+  this.state = GameState.GLITCH;
+  this.glitch.target = target;
+  this.glitch.pointer.from(target.body.pos);
+}
+
+World.prototype._updateGlitch = function() {
+  if (this.glitch.target.discharge()) {
+    console.log('too long');
+    this._endGlitch();
+    return;
+  }
+  this.glitch.pointer.add(this.glitch.delta);
+  this.glitch.pointer.limit(this.arena, GLITCH_PAD);
+  this.glitch.delta.clear();
+}
+
+World.prototype._endGlitch = function() {
+  this.glitch.target.body.pos.from(this.glitch.pointer);
+  this.glitch.target = null;
+  this.state = GameState.FREE;
+}
+
+World.prototype._getTarget = function(source) {
+  return this.players[source];
 }
 
 World.prototype._getOther = function(player) {
@@ -178,7 +214,6 @@ World.prototype._newRound = function(evenStart) {
     this._doStart(this.players[0]);
     this._doSpawn(this.players[1]);
   }
-
   this.ball.body.at(this.arena.w / 2, this.arena.h / 2);
   this.ball.attached = false;
 }

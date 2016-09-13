@@ -1,9 +1,9 @@
-/* global loop, renderer, input */
+/* global loop, graphics, input */
 
 function main() {
   input.init(document);
   var container = document.getElementById('main');
-  renderer.init(container);
+  graphics.init(container);
   loop.start();
 }
 

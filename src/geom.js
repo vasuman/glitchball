@@ -17,6 +17,11 @@ V.prototype.round = function() {
   this.y = Math.round(this.y);
 }
 
+V.prototype.plus = function(v) {
+  this.x += v;
+  this.y += v;
+}
+
 V.prototype.add = function(o) {
   this.x += o.x;
   this.y += o.y;
@@ -54,10 +59,10 @@ V.prototype.from = function(v) {
 V.prototype.fromDirection = function(dir) {
   switch (dir) {
       case Direction.UP:
-          this.y -= 1;
+          this.y += 1;
           break;
       case Direction.DOWN:
-          this.y += 1;
+          this.y -= 1;
           break;
       case Direction.LEFT:
           this.x -= 1;
@@ -82,6 +87,16 @@ V.prototype.limit = function(b, pad) {
 
 V.prototype.clear = function() {
   this.x = this.y = 0;
+}
+
+V.prototype.assignArray = function(arr) {
+  arr[0] = this.x;
+  arr[1] = this.y;
+}
+
+V.prototype.snapTo = function(size) {
+  this.x = Math.floor(this.x / size) * size;
+  this.y = Math.floor(this.y / size) * size;
 }
 
 /*

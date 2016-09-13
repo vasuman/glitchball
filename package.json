@@ -6,8 +6,9 @@
   "scripts": {
     "lint": "eslint -c .eslintrc.json src/",
     "dev": "uglifyjs -b -o build/out.js -- src/*.js",
+    "shaders": "node shaders/stringify.js src/shaders.js",
     "serve": "http-server build/",
-    "watch": "nodemon --ignore build/ --exec npm run dev",
+    "watch": "nodemon -e js,vert,frag --ignore build/ --ignore src/shaders.js --exec 'npm run shaders && npm run dev'",
     "publish": "gh-pages -d build/"
   },
   "keywords": [
