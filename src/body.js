@@ -3,6 +3,7 @@
 
 var DAMPENING = 0.955;
 var DELTA = 1 / 60;
+var MOVE_SMOOTH = 0.8;
 
 function Body(size) {
   this.bounds = new Box();
@@ -31,6 +32,11 @@ Body.prototype.at = function(x, y) {
 Body.prototype.stop = function() {
   this.vel.clear();
   this.acc.clear();
+}
+
+Body.prototype.smoothMoveTo = function(p) {
+  this.pos.mux(MOVE_SMOOTH, p);
+  this._reBound();
 }
 
 Body.prototype._reBound = function() {

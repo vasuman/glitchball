@@ -99,6 +99,11 @@ V.prototype.snapTo = function(size) {
   this.y = Math.floor(this.y / size) * size;
 }
 
+V.prototype.mux = function(f, o) {
+  this.x = this.x * f + (1 - f) * o.x;
+  this.y = this.y * f + (1 - f) * o.y;
+}
+
 /*
  * Describes a box.
  * @param {Number} x Left.
@@ -140,4 +145,9 @@ Box.prototype.contains = function(b) {
 Box.prototype.intersects = function(b) {
   return this.x <= b.x + b.w && b.x <= this.x + this.w &&
     this.y <= b.y + b.h && b.y <= this.y + this.h;
+}
+
+Box.prototype.within = function(v) {
+  return this.x <= v.x && v.x <= this.x + this.w &&
+    this.y <= v.y && v.y <= this.y + this.h;
 }

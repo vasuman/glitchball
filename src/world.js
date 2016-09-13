@@ -17,7 +17,8 @@ var EventType = {
 var PlayerState = {
   SEEK: 1,
   DEFEND: 2,
-  ATTACK: 3
+  ATTACK: 3,
+  TELEPORT: 4
 };
 
 function Player(left) {
@@ -140,9 +141,10 @@ World.prototype._updatePlayers = function() {
     var player = this.players[i];
     player.update();
     // kill out of bounds player
-    if (!this.arena.contains(player.body.bounds)) {
+    if (!this.arena.within(player.body.pos)) {
       if (this.ball.attached === player) {
         this.ball.attached = false;
+        player.state = PlayerState.SEEK;
       }
       this._doSpawn(player);
     }
@@ -152,14 +154,16 @@ World.prototype._updatePlayers = function() {
 World.prototype._updateBall = function() {
   if (this.ball.attached) {
     var pos = this.ball.attached.body.pos;
-    this.ball.body.at(pos.x, pos.y);
-    var other = this._getOther(this.ball.attached);
+    this.ball.body.smoothMoveTo(pos);
+    var player = this.ball.attached;
+    var other = this._getOther(player);
     if (other.body.bounds.intersects(this.ball.body.bounds)) {
       // kill attached
-      this._doSpawn(this.ball.attached);
+      this._doSpawn(player);
       // kill attacker
       this._doSpawn(other);
       this.ball.attached = false;
+      other.state = player.state = PlayerState.SEEK;
     }
   } else {
     // gravitate toward center
@@ -170,6 +174,7 @@ World.prototype._updateBall = function() {
       var player = this.players[i];
       if (player.body.bounds.intersects(this.ball.body.bounds)) {
         this.ball.attached = player;
+        player.state = PlayerState.ATTACK;
       }
     }
   }
@@ -193,7 +198,11 @@ World.prototype._updateGlitch = function() {
 }
 
 World.prototype._endGlitch = function() {
-  this.glitch.target.body.pos.from(this.glitch.pointer);
+  var p = this.glitch.pointer;
+  this.glitch.target.body.pos.from(p);
+  if (this.glitch.target === this.ball.attached) {
+    this.ball.body.at(p.x, p.y)
+  }
   this.glitch.target = null;
   this.state = GameState.FREE;
 }
