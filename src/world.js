@@ -2,8 +2,9 @@
 /* global InputAction, InputTarget, Body, Box, V */
 
 var MAX_CHARGE = 500;
+var GLITCH_SPEED = 1.8;
 var GLITCH_MIN_CHARGE = 100;
-var DISCHARGE_RATIO = 5;
+var DISCHARGE_RATIO = 0.5;
 var SIDE_MARGIN = 50;
 var ACC_FACTOR = 450;
 var PLAYER_SIZE = 40;
@@ -192,7 +193,8 @@ World.prototype._updateGlitch = function() {
     this._endGlitch();
     return;
   }
-  this.glitch.pointer.add(this.glitch.delta);
+  this.glitch.delta.normalize();
+  this.glitch.pointer.fAdd(GLITCH_SPEED, this.glitch.delta);
   this.glitch.pointer.limit(this.arena, GLITCH_PAD);
   this.glitch.delta.clear();
 }

@@ -1,7 +1,5 @@
 precision mediump float;
 
-const float bulb = 0.8;
-const float wireRatio = 1.5;
 const float mixPow = 2.;
 const vec4 black = vec4(0., 0., 0., 1.0);
 
@@ -12,13 +10,15 @@ uniform vec4 u_color;
 uniform mat4 u_worldViewProjection;
 uniform vec2 u_boundMin;
 uniform vec2 u_boundMax;
+uniform float u_bulb;
+uniform float u_wireRatio;
 
 attribute vec3 a_position;
 
 varying vec4 v_color;
 
 void main() {
-    float wireRadius = u_coreSize * wireRatio;
+    float wireRadius = u_coreSize * u_wireRatio;
     vec4 pos = vec4(a_position + u_offset, 1.0);
     float dist = abs(length(a_position - (u_point - u_offset)));
     float influence = 0.0;
@@ -32,7 +32,7 @@ void main() {
             influence += 0.1 * (1. - frac);
             v_color = mix(u_color, black, pow(frac, mixPow));
         }
-        pos.z += influence * u_coreSize * bulb;
+        pos.z += influence * u_coreSize * u_bulb;
     }
     gl_Position = u_worldViewProjection * pos;
 }

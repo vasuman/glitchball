@@ -3,11 +3,16 @@
 
 var SCREEN_WIDTH = 1200;
 var SCREEN_HEIGHT = 600;
-var FOV = 75;
+var FOV = 70;
 var NEAR_PLANE = 0.5;
-var FAR_PLANE = 1000;
+var FAR_PLANE = 10000;
 var MESH_SPACE = 10;
-var BORDER_SIZE = 10;
+var BORDER_SIZE = 40;
+var CAM_SMOOTHNESS = 0.8;
+var CAM_INCLINATION = 20;
+var CAM_ELEVATION = 1;
+var CAM_MIN_SCALE = 300;
+var CAM_SCALE_ADJ = 1.5;
 
 var graphics = (function() {
   var can;
@@ -33,7 +38,7 @@ var graphics = (function() {
 function PerspectiveRenderer(world, can) {
   this.world = world;
   this._setupGL(can);
-  this._setupMatrices();
+  this._setupCamera(can);
 }
 
 PerspectiveRenderer.prototype.draw = function() {
@@ -46,15 +51,32 @@ PerspectiveRenderer.prototype.draw = function() {
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this._updateMatrices();
+
+  if (this.world.state === GameState.GLITCH) {
+    this._tracked.push(this.world.glitch.pointer);
+    this.camera.update(this._tracked);
+    this._tracked.pop();
+  } else {
+    this.camera.update(this._tracked);
+  }
+
   this._drawArena();
   gl.lineWidth(2);
-  this._ent.uniforms.u_color = [1, 1, 1, 1.0];
-  this._drawEnt(this.world.ball, BALL_SIZE);
-  this._ent.uniforms.u_color = [1, 0, 0, 1.0];
-  this._drawEnt(this.world.players[0], PLAYER_SIZE);
-  this._ent.uniforms.u_color = [0, 1, 0, 1.0];
-  this._drawEnt(this.world.players[1], PLAYER_SIZE);
+  this._spike.uniforms.u_wireRatio = 1.5;
+  this._spike.uniforms.u_bulb = 1;
+  this._spike.uniforms.u_color = [1, 1, 1, 1.0];
+  this._drawSpike(this.world.ball.body.pos, BALL_SIZE);
+  this._spike.uniforms.u_color = [1, 0, 0, 1.0];
+  this._drawSpike(this.world.players[0].body.pos, PLAYER_SIZE);
+  this._spike.uniforms.u_color = [0, 1, 0, 1.0];
+  this._drawSpike(this.world.players[1].body.pos, PLAYER_SIZE);
+  var glitch = this.world.glitch;
+  if (glitch.target) {
+    this._spike.uniforms.u_color = [1, 1, 0, 1.0];
+    this._spike.uniforms.u_bulb = 0.8;
+    this._spike.uniforms.u_wireRatio = 1;
+    this._drawSpike(glitch.pointer, PLAYER_SIZE);
+  }
 }
 
 PerspectiveRenderer.prototype._setupGL = function(can) {
@@ -69,11 +91,21 @@ PerspectiveRenderer.prototype._setupGL = function(can) {
   window._gl = gl;
 }
 
+PerspectiveRenderer.prototype._setupCamera = function(can) {
+  var aspectRatio = can.clientWidth / can.clientHeight;
+  this.camera = new Camera(aspectRatio);
+  this._tracked = [];
+  this._tracked.push(this.world.players[0].body.pos);
+  this._tracked.push(this.world.players[1].body.pos);
+  this._tracked.push(this.world.ball.body.pos);
+}
+
 PerspectiveRenderer.prototype._compilePrograms = function() {
   var gl = this.gl;
-  this._ent = {
+  this._spike = {
     offset: new V(),
     uniforms: {
+      u_bulb: 1,
       u_offset: [0, 0, 0],
       u_point: [0, 0, 0],
       u_coreSize: 0,
@@ -82,8 +114,8 @@ PerspectiveRenderer.prototype._compilePrograms = function() {
       u_boundMax: [this.world.arena.w, this.world.arena.h]
     }
   };
-  this._ent.programInfo = twgl.createProgramInfo(gl, [SHADERS.entVertex, SHADERS.entFragment]);
-  this._ent.bufferInfo = twgl.createBufferInfoFromArrays(gl, this._entAttributes());
+  this._spike.programInfo = twgl.createProgramInfo(gl, [SHADERS.entVertex, SHADERS.entFragment]);
+  this._spike.bufferInfo = twgl.createBufferInfoFromArrays(gl, this._spikeAttributes());
   this._arena = {
     uniforms: {
       u_color: [0, 0, 0, 0]
@@ -93,40 +125,19 @@ PerspectiveRenderer.prototype._compilePrograms = function() {
   this._arena.bufferInfo = twgl.createBufferInfoFromArrays(gl, this._arenaAttributes());
 }
 
-PerspectiveRenderer.prototype._setupMatrices = function() {
+PerspectiveRenderer.prototype._drawSpike = function(pos, size) {
   var gl = this.gl;
-  this._projection = twgl.m4.perspective(
-    FOV * Math.PI / 180,
-    gl.canvas.clientWidth / gl.canvas.clientHeight,
-    NEAR_PLANE, FAR_PLANE);
-  //var projection = m4.ortho(-width / 2, width / 2, -height / 4, height / 4, NEAR_PLANE, FAR_PLANE);
-  //this._viewProjection = projection;
-}
-
-PerspectiveRenderer.prototype._updateMatrices = function() {
-  var width = this.world.arena.w;
-  var height = this.world.arena.h;
-  var eye = [width / 2, 0, 300];
-  var target = [width / 2, height / 2, 0];
-  var up = [0, 1, 1];
-  var m4 = twgl.m4;
-  var camera = m4.inverse(m4.lookAt(eye, target, up));
-  this._viewProjection = m4.multiply(camera, this._projection);
-}
-
-PerspectiveRenderer.prototype._drawEnt = function(ent, size) {
-  var gl = this.gl;
-  gl.useProgram(this._ent.programInfo.program);
-  twgl.setBuffersAndAttributes(gl, this._ent.programInfo, this._ent.bufferInfo);
-  ent.body.pos.assignArray(this._ent.uniforms.u_point);
-  this._ent.uniforms.u_worldViewProjection = this._viewProjection;
-  this._ent.uniforms.u_coreSize = size;
-  this._ent.offset.from(ent.body.pos);
-  this._ent.offset.plus(-this._ent.meshSize / 2);
-  this._ent.offset.snapTo(MESH_SPACE * 2);
-  this._ent.offset.assignArray(this._ent.uniforms.u_offset);
-  twgl.setUniforms(this._ent.programInfo, this._ent.uniforms);
-  gl.drawElements(gl.LINE_STRIP, this._ent.bufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
+  gl.useProgram(this._spike.programInfo.program);
+  twgl.setBuffersAndAttributes(gl, this._spike.programInfo, this._spike.bufferInfo);
+  pos.assignArray(this._spike.uniforms.u_point);
+  this._spike.uniforms.u_worldViewProjection = this.camera.viewProjection;
+  this._spike.uniforms.u_coreSize = size;
+  this._spike.offset.from(pos);
+  this._spike.offset.plus(-this._spike.meshSize / 2);
+  this._spike.offset.snapTo(MESH_SPACE * 2);
+  this._spike.offset.assignArray(this._spike.uniforms.u_offset);
+  twgl.setUniforms(this._spike.programInfo, this._spike.uniforms);
+  gl.drawElements(gl.LINE_STRIP, this._spike.bufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
 }
 
 PerspectiveRenderer.prototype._drawArena = function() {
@@ -135,14 +146,14 @@ PerspectiveRenderer.prototype._drawArena = function() {
   gl.useProgram(this._arena.programInfo.program);
   twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.bufferInfo);
   this._arena.uniforms.u_color = [0.3, 0.3, 1, 1];
-  this._arena.uniforms.u_worldViewProjection = this._viewProjection;
+  this._arena.uniforms.u_worldViewProjection = this.camera.viewProjection;
   twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
   gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 0);
   gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 16);
 }
 
-PerspectiveRenderer.prototype._entAttributes = function() {
-  var size = this._ent.meshSize = PLAYER_SIZE * 4;
+PerspectiveRenderer.prototype._spikeAttributes = function() {
+  var size = this._spike.meshSize = PLAYER_SIZE * 4;
   var k = size / MESH_SPACE;
   var position = [];
   var indices = [];
@@ -157,10 +168,6 @@ PerspectiveRenderer.prototype._entAttributes = function() {
     for (var j = 0; j <= k; j++) {
       pushPoint(i, j);
     }
-  }
-
-  if (k % 2 !== 0) {
-    throw new Error('odd k: ', k);
   }
 
   function populateIndex(i, j) {
@@ -327,3 +334,63 @@ FlatRenderer.prototype._preDraw = function(width, height) {
   this.bg.ctx.stroke();
 }
 
+function Camera(aspectRatio) {
+  this.aR = aspectRatio;
+  this.focus = new V();
+  this.scale = 1;
+  this._baseElevation = CAM_ELEVATION;
+  var distRatio = Math.tan(CAM_INCLINATION * Math.PI / 180);
+  this._baseDistance = distRatio * this._baseElevation;
+  this._eye = [0, 0, 0];
+  this._target = [0, 0, 0];
+  this._up = [0, 1, 1];
+  this._avg = new V();
+  this._projection = twgl.m4.perspective(
+    FOV * Math.PI / 180,
+    aspectRatio,
+    NEAR_PLANE, FAR_PLANE);
+  this.viewProjection = twgl.m4.identity();
+
+  //FIXME
+  window._cam = this;
+}
+
+Camera.prototype.update = function(tracked) {
+  var m4 = twgl.m4;
+  this._avg.clear();
+  for (var i = 0; i < tracked.length; i++) {
+    this._avg.add(tracked[i]);
+  }
+  this._avg.scale(1 / tracked.length);
+  this._updateScale(this._avg, tracked);
+  this.focus.mux(CAM_SMOOTHNESS, this._avg);
+  this._updateEye();
+  this.focus.assignArray(this._target);
+  var camera = m4.inverse(m4.lookAt(this._eye, this._target, this._up));
+  this.viewProjection = m4.multiply(camera, this._projection);
+}
+
+Camera.prototype._updateScale = function(center, tracked) {
+  var scale = 1;
+  var f = CAM_SMOOTHNESS;
+  for (var i = 0; i < tracked.length; i++) {
+    var p = tracked[i];
+    var sepX = scale * this.aR;
+    if (p.x < center.x - sepX || p.x > center.x + sepX) {
+      scale = Math.abs(center.x - p.x) / this.aR;
+    }
+    var sepY = scale;
+    if (p.y < center.y - sepY || p.y > center.y + sepY) {
+      scale = Math.abs(center.y - p.y);
+    }
+  }
+  scale *= CAM_SCALE_ADJ;
+  this.scale = f * this.scale + (1 - f) * scale;
+  this.scale = Math.max(CAM_MIN_SCALE, this.scale);
+}
+
+Camera.prototype._updateEye = function() {
+  this._eye[0] = this.focus.x;
+  this._eye[1] = this.focus.y - this.scale * this._baseDistance;
+  this._eye[2] = this.scale * this._baseElevation;
+}
