@@ -1,27 +1,41 @@
 /* exported Body */
 /* global Box, V */
 
-var DAMPENING = 0.95;
+var DAMPENING = 0.955;
+var DELTA = 1 / 60;
+var MOVE_SMOOTH = 0.8;
 
-function Body() {
+function Body(size) {
   this.bounds = new Box();
   this.pos = new V();
   this.vel = new V();
   this.acc = new V();
+  this.bounds.setDim(size, size);
+  this._reBound();
 }
 
-Body.prototype.update = function(delT) {
-  this.vel.fAdd(delT, this.acc);
-  this.pos.fAdd(delT, this.vel);
+Body.prototype.update = function() {
+  this.vel.fAdd(DELTA, this.acc);
+  this.pos.fAdd(DELTA, this.vel);
 
   this.vel.scale(DAMPENING);
-  this.acc.set(0, 0);
+  this.acc.clear();
 
   this._reBound();
 }
 
 Body.prototype.at = function(x, y) {
   this.pos.set(x, y);
+  this._reBound();
+}
+
+Body.prototype.stop = function() {
+  this.vel.clear();
+  this.acc.clear();
+}
+
+Body.prototype.smoothMoveTo = function(p) {
+  this.pos.mux(MOVE_SMOOTH, p);
   this._reBound();
 }
 

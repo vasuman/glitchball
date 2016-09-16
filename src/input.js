@@ -24,22 +24,17 @@ var InputAction = {
   GLITCH_END: 3
 };
 
-var InputTarget = {
-  ONE: 0,
-  TWO: 1
-};
-
-function MoveEvent(target, direction) {
+function MoveEvent(source, direction) {
   this.type = EventType.INPUT;
   this.action = InputAction.MOVE;
-  this.target = target;
+  this.source = source;
   this.direction = direction;
 }
 
-function GlitchEvent(target, start) {
+function GlitchEvent(source, start) {
   this.type = EventType.INPUT;
   this.action = start ? InputAction.GLITCH_START : InputAction.GLITCH_END;
-  this.target = target;
+  this.source = source;
 }
 
 var input = (function() {
@@ -54,7 +49,7 @@ var input = (function() {
     glitch: ENTER_KEY
   };
 
-  var targets = [InputTarget.ONE, InputTarget.TWO];
+  var sources = [0, 1];
   var maps = [oneKeyMap, twoKeyMap];
 
   var pending = [];
@@ -70,25 +65,24 @@ var input = (function() {
     elt.addEventListener('keydown', function(e) {
       var code = e.keyCode;
       if (!isPressed[code]) {
-        console.log(code);
         isPressed[code] = true;
-        targets.forEach(function(target) {
-          if (!glitching[target] && code === maps[target].glitch) {
-            glitching[target] = true;
-            pending.push(new GlitchEvent(target, true));
+        for (var source = 0; source <= 1; source++) {
+          if (!glitching[source] && code === maps[source].glitch) {
+            glitching[source] = true;
+            pending.push(new GlitchEvent(source, true));
           }
-        });
+        }
       }
     });
     elt.addEventListener('keyup', function(e) {
       var code = e.keyCode;
       delete isPressed[code];
-      targets.forEach(function(target) {
-        if (glitching[target] && code === maps[target].glitch) {
-          glitching[target] = false;
-          pending.push(new GlitchEvent(target, false));
+      for (var source = 0; source <= 1; source++) {
+        if (glitching[source] && code === maps[source].glitch) {
+          glitching[source] = false;
+          pending.push(new GlitchEvent(source, false));
         }
-      });
+      }
     });
   }
 
@@ -99,12 +93,12 @@ var input = (function() {
     Array.prototype.push.apply(events, pending);
     pending.splice(0, pending.length);
     for (key in isPressed) {
-      targets.forEach(function (target) {
-        if (maps[target].move.hasOwnProperty(key)) {
-          dir = maps[target].move[key];
-          events.push(new MoveEvent(target, dir));
+      for (var source = 0; source <= 1; source++) {
+        if (maps[source].move.hasOwnProperty(key)) {
+          dir = maps[source].move[key];
+          events.push(new MoveEvent(source, dir));
         }
-      });
+      };
     }
     return events;
   }
