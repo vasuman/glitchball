@@ -8,11 +8,11 @@ var NEAR_PLANE = 0.5;
 var FAR_PLANE = 10000;
 var MESH_SPACE = 10;
 var BORDER_SIZE = 40;
-var CAM_SMOOTHNESS = 0.8;
-var CAM_INCLINATION = 20;
+var CAM_SMOOTHNESS = 0.75;
+var CAM_INCLINATION = 45;
 var CAM_ELEVATION = 1;
 var CAM_MIN_SCALE = 300;
-var CAM_SCALE_ADJ = 1.5;
+var CAM_SCALE_ADJ = 2;
 
 var graphics = (function() {
   var can;
