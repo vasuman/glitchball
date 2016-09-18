@@ -1,6 +1,6 @@
 # Glitchball
 
-![Screenshot]()
+![Screenshot](screenshot.jpg)
 
 # Mechanics
 

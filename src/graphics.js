@@ -6,10 +6,10 @@ var SCREEN_HEIGHT = 600;
 var FOV = 70;
 var NEAR_PLANE = 0.5;
 var FAR_PLANE = 10000;
-var MESH_SPACE = 10;
-var BORDER_SIZE = 40;
+var MESH_SPACE = 20;
+var BORDER_SIZE = 10;
 var CAM_SMOOTHNESS = 0.75;
-var CAM_INCLINATION = 45;
+var CAM_INCLINATION = 30;
 var CAM_ELEVATION = 1;
 var CAM_MIN_SCALE = 300;
 var CAM_SCALE_ADJ = 2;
@@ -59,7 +59,6 @@ PerspectiveRenderer.prototype.draw = function() {
   } else {
     this.camera.update(this._tracked);
   }
-
   this._drawArena();
   gl.lineWidth(2);
   this._spike.uniforms.u_wireRatio = 1.5;
@@ -111,7 +110,8 @@ PerspectiveRenderer.prototype._compilePrograms = function() {
       u_coreSize: 0,
       u_color: [0, 0, 0, 0],
       u_boundMin: [0, 0],
-      u_boundMax: [this.world.arena.w, this.world.arena.h]
+      u_boundMax: [this.world.arena.w, this.world.arena.h],
+      u_goalSize: this.world.goalSize
     }
   };
   this._spike.programInfo = twgl.createProgramInfo(gl, [SHADERS.entVertex, SHADERS.entFragment]);
@@ -142,7 +142,6 @@ PerspectiveRenderer.prototype._drawSpike = function(pos, size) {
 
 PerspectiveRenderer.prototype._drawArena = function() {
   var gl = this.gl;
-  gl.lineWidth(1);
   gl.useProgram(this._arena.programInfo.program);
   twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.bufferInfo);
   this._arena.uniforms.u_color = [0.3, 0.3, 1, 1];
@@ -150,10 +149,13 @@ PerspectiveRenderer.prototype._drawArena = function() {
   twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
   gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 0);
   gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 16);
+  this._arena.uniforms.u_color = [0.5, 0.5, 1, 0.5];
+  twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
+  gl.drawElements(gl.LINE_STRIP, window._del || 15, gl.UNSIGNED_SHORT, 32);
 }
 
 PerspectiveRenderer.prototype._spikeAttributes = function() {
-  var size = this._spike.meshSize = PLAYER_SIZE * 4;
+  var size = this._spike.meshSize = BALL_SIZE * 4;
   var k = size / MESH_SPACE;
   var position = [];
   var indices = [];
@@ -204,37 +206,42 @@ PerspectiveRenderer.prototype._spikeAttributes = function() {
 PerspectiveRenderer.prototype._arenaAttributes = function() {
   var w = this.world.arena.w;
   var h = this.world.arena.h;
-  var gS = 0;
+  var gS = this.world.goalSize;
   var pad = BORDER_SIZE;
   var position = [
-    0, (h - gS) / 2, 0,
+    0, (h / 2 - gS), 0,
     0, 0, 0,
     w, 0, 0,
-    w, (h - gS) / 2, 0,
-    0, (h + gS) / 2, 0,
+    w, (h / 2 - gS), 0,
+    0, (h / 2 + gS), 0,
     0, h, 0,
     w, h, 0,
-    w, (h + gS) / 2, 0,
-    -pad, (h - gS) / 2, 1,
+    w, (h / 2 + gS), 0,
+    -pad, (h / 2 - gS), 1,
     -pad, -pad, 1,
     w + pad, -pad, 1,
-    w + pad, (h - gS) / 2, 1,
-    -pad, (h + gS) / 2, 1,
+    w + pad, (h / 2 - gS), 1,
+    -pad, (h / 2 + gS), 1,
     -pad, h + pad, 1,
     w + pad, h + pad, 1,
-    w + pad, (h + gS) / 2, 1,
-    0, h / 2, 0,
-    w, h / 2, 0,
-    0, h / 4, 0,
-    w, h / 4, 0,
-    0, 3 * h / 4, 0,
-    w, 3 * h / 4, 0
+    w + pad, (h / 2 + gS), 1,
+    w / 2, 0, 0,
+    w / 2, h, 0,
+    0, (h / 2 + gS), 0,
+    gS, (h / 2 + gS), 0,
+    gS, (h / 2 - gS), 0,
+    0, (h / 2 - gS), 0,
+    w, (h / 2 - gS), 0,
+    w - gS, (h / 2 - gS), 0,
+    w - gS, (h / 2 + gS), 0,
+    w, (h / 2 + gS), 0
   ];
   var indices = [
     0, 8, 1, 9, 2, 10, 3, 11,
     7, 15, 6, 14, 5, 13, 4, 12,
-    2, 6, 1, 5
-    // 16, 17, 18, 19, 20, 21
+    16, 17,
+    5, 18, 19, 20, 21, 1,
+    2, 22, 23, 24, 25, 6, 17
   ];
   for (var i = 0; i < 8; i++) {
     indices.push(i);
