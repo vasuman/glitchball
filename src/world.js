@@ -1,6 +1,10 @@
 /* exported EventType, World */
-/* global InputAction, InputTarget, Body, Box, V */
+/* global InputAction, InputTarget, Box, V */
 
+var DAMPENING = 0.955;
+var DELTA = 1 / 60;
+var MOVE_SMOOTH = 0.8;
+var VEL_ZERO = 0.05;
 var MAX_CHARGE = 500;
 var GLITCH_SPEED = 1.8;
 var GLITCH_MIN_CHARGE = 100;
@@ -21,6 +25,47 @@ var PlayerState = {
   ATTACK: 3,
   TELEPORT: 4
 };
+
+function Body(size) {
+  this.bounds = new Box();
+  this.pos = new V();
+  this.vel = new V();
+  this.acc = new V();
+  this.bounds.setDim(size, size);
+  this._reBound();
+}
+
+Body.prototype.update = function() {
+  this.vel.fAdd(DELTA, this.acc);
+  this.pos.fAdd(DELTA, this.vel);
+
+  this.vel.scale(DAMPENING);
+  if (this.vel.length() < VEL_ZERO) {
+    this.vel.clear();
+  }
+  this.acc.clear();
+
+  this._reBound();
+}
+
+Body.prototype.at = function(x, y) {
+  this.pos.set(x, y);
+  this._reBound();
+}
+
+Body.prototype.stop = function() {
+  this.vel.clear();
+  this.acc.clear();
+}
+
+Body.prototype.smoothMoveTo = function(p) {
+  this.pos.mux(MOVE_SMOOTH, p);
+  this._reBound();
+}
+
+Body.prototype._reBound = function() {
+  this.bounds.setCenter(this.pos);
+}
 
 function Player(left) {
   this.left = left;
