@@ -19,7 +19,7 @@ var HUD_CHARGE_WIDTH = 200;
 var HUD_CHARGE_MIX = 20;
 var HUD_CHARGE_HEIGHT = 20;
 var HUD_CHARGE_TEXT = 'Glitch';
-var HUD_CHARGE_TEXT_PAD = 4;
+var HUD_CHARGE_TEXT_PAD = 2;
 
 var graphics = (function() {
   var root;
@@ -83,10 +83,10 @@ Drawer.prototype._drawHudCharge = function(player, left) {
   this._hud.ctx.strokeStyle = lightColor;
   this._hud.ctx.strokeRect(x, y, HUD_CHARGE_WIDTH, HUD_CHARGE_HEIGHT);
   this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = lightColor;
-  this._hud.ctx.font = HUD_CHARGE_HEIGHT - HUD_CHARGE_TEXT_PAD + 'px sans-serif';
+  this._hud.ctx.font = (HUD_CHARGE_HEIGHT - HUD_CHARGE_TEXT_PAD) + 'px sans-serif';
   this._hud.ctx.textAlign = 'start';
   this._hud.ctx.textBaseline = 'top';
-  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x + HUD_CHARGE_TEXT_PAD, y + HUD_CHARGE_TEXT_PAD);
+  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x + HUD_CHARGE_TEXT_PAD, y);
   this._hud.ctx.shadowBlur = 0;
 }
 
@@ -242,9 +242,9 @@ PerspectiveRenderer.prototype._spikeAttributes = function() {
   var indices = [];
 
   function pushPoint(i, j) {
-      position.push(i * MESH_SPACE); // x
-      position.push(j * MESH_SPACE); // y
-      position.push(0); // z
+    position.push(i * MESH_SPACE); // x
+    position.push(j * MESH_SPACE); // y
+    position.push(0); // z
   }
 
   for (var i = 0; i <= k; i++) {
@@ -343,12 +343,8 @@ function Camera(aspectRatio) {
   this._target = [0, 0, 0];
   this._up = [0, 1, 1];
   this._avg = new V();
-  this._projection = twgl.m4.perspective(
-    FOV * Math.PI / 180,
-    aspectRatio,
-    NEAR_PLANE, FAR_PLANE);
+  this._initProjection();
   this.viewProjection = twgl.m4.identity();
-
   //FIXME
   window._cam = this;
 }
@@ -366,6 +362,13 @@ Camera.prototype.update = function(tracked) {
   this.focus.assignArray(this._target);
   var camera = m4.inverse(m4.lookAt(this._eye, this._target, this._up));
   this.viewProjection = m4.multiply(camera, this._projection);
+}
+
+Camera.prototype._initProjection = function() {
+  this._projection = twgl.m4.perspective(
+    FOV * Math.PI / 180,
+    this.aR,
+    NEAR_PLANE, FAR_PLANE);
 }
 
 Camera.prototype._updateScale = function(center, tracked) {
