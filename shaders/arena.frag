@@ -1,7 +1,7 @@
 precision mediump float;
 
 const vec4 black = vec4(0., 0., 0., 0.0);
-const float darkSmooth = 0.65;
+const float darkSmooth = 0.4;
 
 uniform vec4 u_color;
 

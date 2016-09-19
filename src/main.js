@@ -3,7 +3,7 @@
 function main() {
   input.init(document);
   var container = document.getElementById('main');
-  graphics.init(container);
+  graphics.setRoot(container);
   loop.start();
 }
 

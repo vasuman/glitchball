@@ -39,7 +39,7 @@ void main() {
             float mirY = (pos.y > halfY) ?  pos.y - halfY : halfY - pos.y;
             if (mirX <= u_goalSize && mirY <= u_goalSize) {
                 color = mix(color, yellow, 0.5);
-                influence *= 2. * pow(max(mirX, mirY) / u_goalSize, 2.);
+                influence *= 1.5 * pow(max(mirX, mirY) / u_goalSize, 2.);
             }
             v_color = mix(color, black, pow(frac, mixPow));
         }
