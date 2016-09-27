@@ -1,5 +1,6 @@
 precision mediump float;
 
+const float goalFactor = 2.;
 const float mixPow = 2.;
 const vec4 black = vec4(0., 0., 0., 1.0);
 const vec4 yellow = vec4(0., 0., 1., 1.0);
@@ -39,7 +40,7 @@ void main() {
             float mirY = (pos.y > halfY) ?  pos.y - halfY : halfY - pos.y;
             if (mirX <= u_goalSize && mirY <= u_goalSize) {
                 color = mix(color, yellow, 0.5);
-                influence *= 1.5 * pow(max(mirX, mirY) / u_goalSize, 2.);
+                influence *= goalFactor * pow(max(mirX, mirY) / u_goalSize, 2.);
             }
             v_color = mix(color, black, pow(frac, mixPow));
         }

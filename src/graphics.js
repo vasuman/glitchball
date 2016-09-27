@@ -14,12 +14,12 @@ var CAM_ELEVATION = 1;
 var CAM_MIN_SCALE = 300;
 var CAM_SCALE_ADJ = 2;
 var HUD_PAD = 15;
-var HUD_SCORE_SIZE = 36;
+var HUD_SCORE_FONT = '36px Futura';
 var HUD_CHARGE_WIDTH = 200;
 var HUD_CHARGE_MIX = 20;
 var HUD_CHARGE_HEIGHT = 20;
 var HUD_CHARGE_TEXT = 'Glitch';
-var HUD_CHARGE_TEXT_PAD = 2;
+var HUD_CHARGE_FONT = '12px sans-serif';
 
 var graphics = (function() {
   var root;
@@ -83,16 +83,16 @@ Drawer.prototype._drawHudCharge = function(player, left) {
   this._hud.ctx.strokeStyle = lightColor;
   this._hud.ctx.strokeRect(x, y, HUD_CHARGE_WIDTH, HUD_CHARGE_HEIGHT);
   this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = lightColor;
-  this._hud.ctx.font = (HUD_CHARGE_HEIGHT - HUD_CHARGE_TEXT_PAD) + 'px sans-serif';
+  this._hud.ctx.font = HUD_CHARGE_FONT;
   this._hud.ctx.textAlign = 'start';
-  this._hud.ctx.textBaseline = 'top';
-  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x + HUD_CHARGE_TEXT_PAD, y);
+  this._hud.ctx.textBaseline = 'bottom';
+  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x, y);
   this._hud.ctx.shadowBlur = 0;
 }
 
 Drawer.prototype._drawHudScore = function(player, left) {
   this._hud.ctx.fillStyle = 'white';
-  this._hud.ctx.font = HUD_SCORE_SIZE + 'px monospace';
+  this._hud.ctx.font = HUD_SCORE_FONT;
   this._hud.ctx.textBaseline = 'top';
   this._hud.ctx.textAlign = left ? 'start' : 'end';
   var x = left ? HUD_PAD : this._hud.width - HUD_PAD;
