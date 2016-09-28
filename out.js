@@ -1,35 +1,3 @@
-function Bitmap(width, height) {
-    this.can = document.createElement("canvas");
-    this.ctx = this.can.getContext("2d");
-    this.resize(width, height);
-}
-
-Bitmap.prototype.drawBox = function(b) {
-    this.ctx.fillRect(b.x, b.y, b.w, b.h);
-};
-
-Bitmap.prototype.drawCircle = function(p, r) {
-    this.ctx.beginPath();
-    this.ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-    this.ctx.fill();
-};
-
-Bitmap.prototype.drawLine = function(s, e) {
-    this.ctx.beginPath();
-    this.ctx.moveTo(s.x, s.y);
-    this.ctx.lineTo(e.x, e.y);
-    this.ctx.stroke();
-};
-
-Bitmap.prototype.clear = function() {
-    this.ctx.clearRect(0, 0, this.width, this.height);
-};
-
-Bitmap.prototype.resize = function(width, height) {
-    this.width = this.can.width = width;
-    this.height = this.can.height = height;
-};
-
 var Direction = {
     UP: 1,
     DOWN: 2,
@@ -199,23 +167,112 @@ var CAM_MIN_SCALE = 300;
 
 var CAM_SCALE_ADJ = 2;
 
+var HUD_PAD = 15;
+
+var HUD_SCORE_FONT = "36px Futura";
+
+var HUD_CHARGE_WIDTH = 200;
+
+var HUD_CHARGE_MIX = 20;
+
+var HUD_CHARGE_HEIGHT = 20;
+
+var HUD_CHARGE_TEXT = "Glitch";
+
+var HUD_CHARGE_FONT = "12px sans-serif";
+
 var graphics = function() {
-    var can;
-    function init(elt) {
-        can = document.createElement("canvas");
-        can.id = "game-canvas";
-        elt.appendChild(can);
-        can.width = SCREEN_WIDTH;
-        can.height = SCREEN_HEIGHT;
+    var root;
+    function setRoot(_elt) {
+        root = _elt;
     }
-    function setup(world) {
-        return new PerspectiveRenderer(world, can);
+    function init(world) {
+        return new Drawer(world, root);
     }
     return {
-        init: init,
-        setup: setup
+        setRoot: setRoot,
+        init: init
     };
 }();
+
+function Drawer(world, root) {
+    this._root = root;
+    this.world = world;
+    this._rend = this._screenBuffer();
+    this._hud = this._screenBuffer(true);
+    this._setupRoot();
+    this.renderer = new PerspectiveRenderer(world, this._rend.can);
+}
+
+Drawer.prototype.draw = function() {
+    this._updateHud();
+    this.renderer.render();
+};
+
+Drawer.prototype._updateHud = function() {
+    this._hud.ctx.clearRect(0, 0, this._hud.width, this._hud.height);
+    this._drawHudScore(this.world.players[0], true);
+    this._drawHudScore(this.world.players[1], false);
+    this._drawHudCharge(this.world.players[0], true);
+    this._drawHudCharge(this.world.players[1], false);
+};
+
+Drawer.prototype._drawHudCharge = function(player, left) {
+    var r = player.charge / GLITCH_MIN_CHARGE;
+    var lightColor;
+    var color;
+    if (player.charge - GLITCH_MIN_CHARGE < 0) {
+        lightColor = "#aaa";
+        color = "#a22";
+        this._hud.ctx.shadowBlur = 5;
+    } else {
+        lightColor = "#fff";
+        color = "#2a2";
+        this._hud.ctx.shadowBlur = 20;
+    }
+    this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = color;
+    var y = this._hud.height - HUD_PAD - HUD_CHARGE_HEIGHT;
+    var width = Math.max(0, Math.round(player.charge / MAX_CHARGE * HUD_CHARGE_WIDTH));
+    var x = left ? HUD_PAD : this._hud.width - HUD_PAD - HUD_CHARGE_WIDTH;
+    this._hud.ctx.fillRect(x, y, width, HUD_CHARGE_HEIGHT);
+    this._hud.ctx.lineWidth = 1;
+    this._hud.ctx.strokeStyle = lightColor;
+    this._hud.ctx.strokeRect(x, y, HUD_CHARGE_WIDTH, HUD_CHARGE_HEIGHT);
+    this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = lightColor;
+    this._hud.ctx.font = HUD_CHARGE_FONT;
+    this._hud.ctx.textAlign = "start";
+    this._hud.ctx.textBaseline = "bottom";
+    this._hud.ctx.fillText(HUD_CHARGE_TEXT, x, y);
+    this._hud.ctx.shadowBlur = 0;
+};
+
+Drawer.prototype._drawHudScore = function(player, left) {
+    this._hud.ctx.fillStyle = "white";
+    this._hud.ctx.font = HUD_SCORE_FONT;
+    this._hud.ctx.textBaseline = "top";
+    this._hud.ctx.textAlign = left ? "start" : "end";
+    var x = left ? HUD_PAD : this._hud.width - HUD_PAD;
+    var y = HUD_PAD;
+    this._hud.ctx.fillText(player.score.toString(), x, y);
+};
+
+Drawer.prototype._setHudFont = function() {};
+
+Drawer.prototype._screenBuffer = function(initCtx) {
+    var ret = {};
+    ret.can = document.createElement("canvas");
+    ret.width = ret.can.width = SCREEN_WIDTH;
+    ret.height = ret.can.height = SCREEN_HEIGHT;
+    if (initCtx) {
+        ret.ctx = ret.can.getContext("2d");
+    }
+    return ret;
+};
+
+Drawer.prototype._setupRoot = function() {
+    this._root.appendChild(this._rend.can);
+    this._root.appendChild(this._hud.can);
+};
 
 function PerspectiveRenderer(world, can) {
     this.world = world;
@@ -223,13 +280,10 @@ function PerspectiveRenderer(world, can) {
     this._setupCamera(can);
 }
 
-PerspectiveRenderer.prototype.draw = function() {
+PerspectiveRenderer.prototype.render = function() {
     var time = Date.now();
     var gl = this.gl;
     var m4 = twgl.m4;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.CULL_FACE);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (this.world.state === GameState.GLITCH) {
         this._tracked.push(this.world.glitch.pointer);
@@ -266,9 +320,11 @@ PerspectiveRenderer.prototype._setupGL = function(can) {
     });
     this._compilePrograms();
     gl.enable(gl.BLEND);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
     gl.blendFunc(gl.ONE, gl.ONE);
-    console.log(gl.ONE);
     gl.clearColor(0, 0, 0, 1);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     window._gl = gl;
 };
 
@@ -315,7 +371,7 @@ PerspectiveRenderer.prototype._drawSpike = function(pos, size) {
     this._spike.uniforms.u_worldViewProjection = this.camera.viewProjection;
     this._spike.uniforms.u_coreSize = size;
     this._spike.offset.from(pos);
-    this._spike.offset.plus(-this._spike.meshSize / 2);
+    this._spike.offset.plus(MESH_SPACE - this._spike.meshSize / 2);
     this._spike.offset.snapTo(MESH_SPACE * 2);
     this._spike.offset.assignArray(this._spike.uniforms.u_offset);
     twgl.setUniforms(this._spike.programInfo, this._spike.uniforms);
@@ -326,12 +382,12 @@ PerspectiveRenderer.prototype._drawArena = function() {
     var gl = this.gl;
     gl.useProgram(this._arena.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.bufferInfo);
-    this._arena.uniforms.u_color = [ .3, .3, 1, 1 ];
+    this._arena.uniforms.u_color = [ .4, .4, 1, 1 ];
     this._arena.uniforms.u_worldViewProjection = this.camera.viewProjection;
     twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
     gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 0);
     gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 16);
-    this._arena.uniforms.u_color = [ .5, .5, 1, .5 ];
+    this._arena.uniforms.u_color = [ .2, .2, 1, .5 ];
     twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
     gl.drawElements(gl.LINE_STRIP, window._del || 15, gl.UNSIGNED_SHORT, 32);
 };
@@ -400,94 +456,6 @@ PerspectiveRenderer.prototype._arenaAttributes = function() {
     };
 };
 
-function FlatRenderer(world, can) {
-    var width = world.arena.w;
-    var height = world.arena.h;
-    this.ctx = can.getContext("2d");
-    this.world = world;
-    this.base = new Bitmap(width, height);
-    this.bg = new Bitmap(width, height);
-    this.hud = new Bitmap(width, height);
-    this.hud.ctx.font = "16px Arial";
-    this._preDraw(width, height);
-}
-
-FlatRenderer.prototype.draw = function() {
-    this._clearLayers();
-    this.ctx.clearRect(0, 0, this.world.arena.w, this.world.arena.h);
-    this.base.ctx.globalAlpha = .8;
-    this.base.ctx.globalAlpha = 1;
-    this._drawEnt(this.world.players[0], "blue");
-    this._drawEnt(this.world.players[1], "red");
-    this._drawBall(this.world.ball);
-    if (this.world.state == GameState.GLITCH) {
-        this._drawGlitch(this.world.glitch);
-    }
-    this.ctx.drawImage(this.bg.can, 0, 0);
-    this.ctx.drawImage(this.base.can, 0, 0);
-    this.ctx.drawImage(this.hud.can, 0, 0);
-};
-
-FlatRenderer.prototype._clearLayers = function() {
-    this.base.clear();
-    this.hud.clear();
-};
-
-FlatRenderer.prototype._drawEnt = function(ent) {
-    var color;
-    if (ent.left) {
-        this.hud.ctx.fillStyle = "black";
-        this.hud.ctx.fillText("" + ent.score, 100, 20);
-        this.hud.ctx.fillStyle = ent.charge > GLITCH_MIN_CHARGE ? "green" : "red";
-        this.hud.ctx.fillText("" + Math.max(Math.floor(ent.charge / 10), 0), 100, 40);
-        color = "blue";
-    } else {
-        this.hud.ctx.fillStyle = "black";
-        this.hud.ctx.fillText("" + ent.score, this.hud.width - 100, 20);
-        this.hud.ctx.fillStyle = ent.charge > GLITCH_MIN_CHARGE ? "green" : "red";
-        this.hud.ctx.fillText("" + Math.max(Math.floor(ent.charge / 10), 0), this.hud.width - 100, 40);
-        color = "magenta";
-    }
-    this.base.ctx.save();
-    this.base.ctx.fillStyle = color;
-    this.base.ctx.shadowColor = ent.charge > GLITCH_MIN_CHARGE ? "green" : "red";
-    this.base.ctx.shadowBlur = Math.min(1, Math.max(0, ent.charge / GLITCH_MIN_CHARGE)) * 10;
-    this.base.drawBox(ent.body.bounds);
-    this.base.ctx.restore();
-};
-
-FlatRenderer.prototype._drawBall = function(ball) {
-    this.base.ctx.fillStyle = "green";
-    this.base.drawCircle(ball.body.pos, ball.body.bounds.w / 2);
-};
-
-FlatRenderer.prototype._drawGlitch = function(glitch) {
-    this.base.ctx.fillStyle = "black";
-    this.base.drawLine(glitch.pointer, glitch.target.body.pos);
-};
-
-FlatRenderer.prototype._preDraw = function(width, height) {
-    var midWidth = width / 2;
-    var midHeight = height / 2;
-    this.bg.ctx.lineWidth = 2;
-    this.bg.ctx.strokeRect(0, 0, width, height);
-    this.bg.ctx.lineWidth = 2;
-    this.bg.ctx.beginPath();
-    this.bg.ctx.moveTo(midWidth, 0);
-    this.bg.ctx.lineTo(midWidth, midHeight - 10);
-    this.bg.ctx.moveTo(midWidth, midHeight + 10);
-    this.bg.ctx.lineTo(midWidth, height);
-    this.bg.ctx.stroke();
-    this.bg.ctx.lineWidth = 20;
-    this.bg.ctx.strokeStyle = "orange";
-    this.bg.ctx.beginPath();
-    this.bg.ctx.moveTo(0, midHeight - this.world.goalSize / 2);
-    this.bg.ctx.lineTo(0, midHeight + this.world.goalSize / 2);
-    this.bg.ctx.moveTo(width, midHeight - this.world.goalSize / 2);
-    this.bg.ctx.lineTo(width, midHeight + this.world.goalSize / 2);
-    this.bg.ctx.stroke();
-};
-
 function Camera(aspectRatio) {
     this.aR = aspectRatio;
     this.focus = new V();
@@ -499,7 +467,7 @@ function Camera(aspectRatio) {
     this._target = [ 0, 0, 0 ];
     this._up = [ 0, 1, 1 ];
     this._avg = new V();
-    this._projection = twgl.m4.perspective(FOV * Math.PI / 180, aspectRatio, NEAR_PLANE, FAR_PLANE);
+    this._initProjection();
     this.viewProjection = twgl.m4.identity();
     window._cam = this;
 }
@@ -517,6 +485,10 @@ Camera.prototype.update = function(tracked) {
     this.focus.assignArray(this._target);
     var camera = m4.inverse(m4.lookAt(this._eye, this._target, this._up));
     this.viewProjection = m4.multiply(camera, this._projection);
+};
+
+Camera.prototype._initProjection = function() {
+    this._projection = twgl.m4.perspective(FOV * Math.PI / 180, this.aR, NEAR_PLANE, FAR_PLANE);
 };
 
 Camera.prototype._updateScale = function(center, tracked) {
@@ -651,9 +623,9 @@ var loop = function() {
     function start() {
         screen = Screen.GAME;
         gameRunning = true;
-        world = new World(2800, 1500, 160);
+        world = new World(3200, 1600, 200);
         world.init();
-        renderer = graphics.setup(world);
+        renderer = graphics.init(world);
         tick();
     }
     function tick() {
@@ -675,17 +647,17 @@ var loop = function() {
 function main() {
     input.init(document);
     var container = document.getElementById("main");
-    graphics.init(container);
+    graphics.setRoot(container);
     loop.start();
 }
 
 window.addEventListener("load", main);
 
 var SHADERS = {
-    entVertex: "precision mediump float;\n\nconst float mixPow = 2.;\nconst vec4 black = vec4(0., 0., 0., 1.0);\nconst vec4 yellow = vec4(0., 0., 1., 1.0);\n\nuniform vec3 u_offset;\nuniform vec3 u_point;\nuniform float u_coreSize;\nuniform vec4 u_color;\nuniform mat4 u_worldViewProjection;\nuniform vec2 u_boundMin;\nuniform vec2 u_boundMax;\nuniform float u_bulb;\nuniform float u_wireRatio;\nuniform float u_goalSize;\n\nattribute vec3 a_position;\n\nvarying vec4 v_color;\n\nvoid main() {\n    float wireRadius = u_coreSize * u_wireRatio;\n    float halfX = (u_boundMin.x + u_boundMax.x) / 2.;\n    float halfY = (u_boundMin.y + u_boundMax.y) / 2.;\n    vec4 pos = vec4(a_position + u_offset, 1.0);\n    float dist = abs(length(a_position - (u_point - u_offset)));\n    float influence = 0.0;\n    v_color = black;\n    if (pos.x > u_boundMin.x && pos.y > u_boundMin.y && pos.x < u_boundMax.x && pos.y < u_boundMax.y) {\n        if (dist < u_coreSize) {\n            influence = sqrt(pow(u_coreSize, 2.0) - pow(dist, 2.0)) / u_coreSize;\n        }\n        if (dist < wireRadius) {\n            float frac = dist / wireRadius;\n            influence += 0.1 * (1. - frac);\n            vec4 color = u_color;\n            float mirX = (pos.x > halfX) ? u_boundMax.x - pos.x : pos.x;\n            float mirY = (pos.y > halfY) ?  pos.y - halfY : halfY - pos.y;\n            if (mirX <= u_goalSize && mirY <= u_goalSize) {\n                color = mix(color, yellow, 0.5);\n                influence *= 2. * pow(max(mirX, mirY) / u_goalSize, 2.);\n            }\n            v_color = mix(color, black, pow(frac, mixPow));\n        }\n        pos.z += influence * u_coreSize * u_bulb;\n    }\n    gl_Position = u_worldViewProjection * pos;\n}\n",
+    entVertex: "precision mediump float;\n\nconst float goalFactor = 2.;\nconst float mixPow = 2.;\nconst vec4 black = vec4(0., 0., 0., 1.0);\nconst vec4 yellow = vec4(0., 0., 1., 1.0);\n\nuniform vec3 u_offset;\nuniform vec3 u_point;\nuniform float u_coreSize;\nuniform vec4 u_color;\nuniform mat4 u_worldViewProjection;\nuniform vec2 u_boundMin;\nuniform vec2 u_boundMax;\nuniform float u_bulb;\nuniform float u_wireRatio;\nuniform float u_goalSize;\n\nattribute vec3 a_position;\n\nvarying vec4 v_color;\n\nvoid main() {\n    float wireRadius = u_coreSize * u_wireRatio;\n    float halfX = (u_boundMin.x + u_boundMax.x) / 2.;\n    float halfY = (u_boundMin.y + u_boundMax.y) / 2.;\n    vec4 pos = vec4(a_position + u_offset, 1.0);\n    float dist = abs(length(a_position - (u_point - u_offset)));\n    float influence = 0.0;\n    v_color = black;\n    if (pos.x > u_boundMin.x && pos.y > u_boundMin.y && pos.x < u_boundMax.x && pos.y < u_boundMax.y) {\n        if (dist < u_coreSize) {\n            influence = sqrt(pow(u_coreSize, 2.0) - pow(dist, 2.0)) / u_coreSize;\n        }\n        if (dist < wireRadius) {\n            float frac = dist / wireRadius;\n            influence += 0.1 * (1. - frac);\n            vec4 color = u_color;\n            float mirX = (pos.x > halfX) ? u_boundMax.x - pos.x : pos.x;\n            float mirY = (pos.y > halfY) ?  pos.y - halfY : halfY - pos.y;\n            if (mirX <= u_goalSize && mirY <= u_goalSize) {\n                color = mix(color, yellow, 0.5);\n                influence *= goalFactor * pow(max(mirX, mirY) / u_goalSize, 2.);\n            }\n            v_color = mix(color, black, pow(frac, mixPow));\n        }\n        pos.z += influence * u_coreSize * u_bulb;\n    }\n    gl_Position = u_worldViewProjection * pos;\n}\n",
     entFragment: "precision mediump float;\n\nvarying vec4 v_color;\n\nvoid main() {\n    gl_FragColor = v_color;\n}\n",
     arenaVertex: "precision mediump float;\nconst float heightScale = 35.;\n\nattribute vec3 a_position;\n\nuniform mat4 u_worldViewProjection;\n\nvarying float v_darkness;\n\nvoid main() {\n    v_darkness = a_position.z;\n    gl_Position = u_worldViewProjection * vec4(a_position.xy, a_position.z * heightScale, 1.);\n}\n\n",
-    arenaFragment: "precision mediump float;\n\nconst vec4 black = vec4(0., 0., 0., 0.0);\nconst float darkSmooth = 0.65;\n\nuniform vec4 u_color;\n\nvarying float v_darkness;\n\nvoid main() {\n    gl_FragColor = mix(u_color, black, pow(v_darkness, darkSmooth));\n}\n"
+    arenaFragment: "precision mediump float;\n\nconst vec4 black = vec4(0., 0., 0., 0.0);\nconst float darkSmooth = 0.4;\n\nuniform vec4 u_color;\n\nvarying float v_darkness;\n\nvoid main() {\n    gl_FragColor = mix(u_color, black, pow(v_darkness, darkSmooth));\n}\n"
 };
 
 (function(root, factory) {
@@ -4647,7 +4619,7 @@ var SHADERS = {
     return notrequirebecasebrowserifymessesup("main");
 });
 
-var DAMPENING = .955;
+var DAMPENING = .96;
 
 var DELTA = 1 / 60;
 
@@ -4657,21 +4629,23 @@ var VEL_ZERO = .05;
 
 var MAX_CHARGE = 500;
 
-var GLITCH_SPEED = 1.8;
+var GLITCH_SPEED = 8;
 
-var GLITCH_MIN_CHARGE = 100;
+var GLITCH_MIN_CHARGE = 125;
 
-var DISCHARGE_RATIO = .5;
+var DISCHARGE_RATIO = 5;
 
 var SIDE_MARGIN = 50;
 
-var ACC_FACTOR = 450;
+var ACC_FACTOR = 750;
 
 var PLAYER_SIZE = 40;
 
 var BALL_SIZE = 50;
 
 var GLITCH_PAD = 10;
+
+var BALL_PUSHBACK = 2e4;
 
 var EventType = {
     INPUT: 1
@@ -4845,6 +4819,15 @@ World.prototype._updatePlayers = function() {
         player.update();
         if (!this.arena.within(player.body.pos)) {
             if (this.ball.attached === player) {
+                if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
+                    if (!player.left && player.body.pos.x < 0 || player.left && player.body.pos.x > this.arena.w) {
+                        player.score += 1;
+                    }
+                }
+                this.arena.center(this.ball.body.acc);
+                this.ball.body.acc.sub(this.ball.body.pos);
+                this.ball.body.acc.normalize();
+                this.ball.body.acc.scale(BALL_PUSHBACK);
                 this.ball.attached = false;
                 player.state = PlayerState.SEEK;
             }
@@ -4866,12 +4849,11 @@ World.prototype._updateBall = function() {
             other.state = player.state = PlayerState.SEEK;
         }
     } else {
-        this.arena.center(this.ball.body.acc);
-        this.ball.body.acc.sub(this.ball.body.pos);
         this.ball.body.update();
         for (var i = 0; i < this.players.length; i++) {
             var player = this.players[i];
             if (player.body.bounds.intersects(this.ball.body.bounds)) {
+                this.ball.body.stop();
                 this.ball.attached = player;
                 player.state = PlayerState.ATTACK;
             }
@@ -4915,34 +4897,20 @@ World.prototype._getOther = function(player) {
     return player === this.players[0] ? this.players[1] : this.players[0];
 };
 
-World.prototype._newRound = function(evenStart) {
-    if (evenStart) {
-        this._doSpawn(this.players[0]);
-        this._doStart(this.players[1]);
-    } else {
-        this._doStart(this.players[0]);
-        this._doSpawn(this.players[1]);
-    }
+World.prototype._newRound = function() {
+    this._doSpawn(this.players[0]);
+    this._doSpawn(this.players[1]);
     this.ball.body.at(this.arena.w / 2, this.arena.h / 2);
     this.ball.attached = false;
 };
 
 World.prototype._doSpawn = function(ent) {
+    var space = this.goalSize + SIDE_MARGIN;
     if (ent.left) {
-        ent.body.at(SIDE_MARGIN, this.arena.h / 2);
+        ent.body.at(space, this.arena.h / 2);
         ent.body.stop();
     } else {
-        ent.body.at(this.arena.w - SIDE_MARGIN, this.arena.h / 2);
-        ent.body.stop();
-    }
-};
-
-World.prototype._doStart = function(ent) {
-    if (ent.left) {
-        ent.body.at(this.arena.w / 2 - SIDE_MARGIN, this.arena.h / 2);
-        ent.body.stop();
-    } else {
-        ent.body.at(this.arena.w / 2 + SIDE_MARGIN, this.arena.h / 2);
+        ent.body.at(this.arena.w - space, this.arena.h / 2);
         ent.body.stop();
     }
 };

@@ -1,19 +1,20 @@
 /* exported EventType, World */
 /* global InputAction, InputTarget, Box, V */
 
-var DAMPENING = 0.955;
+var DAMPENING = 0.96;
 var DELTA = 1 / 60;
 var MOVE_SMOOTH = 0.8;
 var VEL_ZERO = 0.05;
 var MAX_CHARGE = 500;
-var GLITCH_SPEED = 1.8;
-var GLITCH_MIN_CHARGE = 100;
-var DISCHARGE_RATIO = 0.5;
+var GLITCH_SPEED = 8;
+var GLITCH_MIN_CHARGE = 125;
+var DISCHARGE_RATIO = 5;
 var SIDE_MARGIN = 50;
-var ACC_FACTOR = 450;
+var ACC_FACTOR = 750;
 var PLAYER_SIZE = 40;
 var BALL_SIZE = 50;
 var GLITCH_PAD = 10;
+var BALL_PUSHBACK = 20000;
 
 var EventType = {
   INPUT: 1
@@ -189,6 +190,16 @@ World.prototype._updatePlayers = function() {
     // kill out of bounds player
     if (!this.arena.within(player.body.pos)) {
       if (this.ball.attached === player) {
+        if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
+          if ((!player.left && player.body.pos.x < 0) || (player.left && player.body.pos.x > this.arena.w)) {
+            player.score += 1;
+          }
+        }
+        // gravitate toward center
+        this.arena.center(this.ball.body.acc);
+        this.ball.body.acc.sub(this.ball.body.pos);
+        this.ball.body.acc.normalize();
+        this.ball.body.acc.scale(BALL_PUSHBACK);
         this.ball.attached = false;
         player.state = PlayerState.SEEK;
       }
@@ -212,13 +223,11 @@ World.prototype._updateBall = function() {
       other.state = player.state = PlayerState.SEEK;
     }
   } else {
-    // gravitate toward center
-    this.arena.center(this.ball.body.acc);
-    this.ball.body.acc.sub(this.ball.body.pos);
     this.ball.body.update();
     for (var i = 0; i < this.players.length; i++) {
       var player = this.players[i];
       if (player.body.bounds.intersects(this.ball.body.bounds)) {
+        this.ball.body.stop();
         this.ball.attached = player;
         player.state = PlayerState.ATTACK;
       }
@@ -262,34 +271,20 @@ World.prototype._getOther = function(player) {
   return (player === this.players[0]) ? this.players[1] : this.players[0];
 }
 
-World.prototype._newRound = function(evenStart) {
-  if (evenStart) {
-    this._doSpawn(this.players[0]);
-    this._doStart(this.players[1]);
-  } else {
-    this._doStart(this.players[0]);
-    this._doSpawn(this.players[1]);
-  }
+World.prototype._newRound = function() {
+  this._doSpawn(this.players[0]);
+  this._doSpawn(this.players[1]);
   this.ball.body.at(this.arena.w / 2, this.arena.h / 2);
   this.ball.attached = false;
 }
 
 World.prototype._doSpawn = function(ent) {
+  var space = this.goalSize + SIDE_MARGIN;
   if (ent.left) {
-    ent.body.at(SIDE_MARGIN, this.arena.h / 2);
+    ent.body.at(space, this.arena.h / 2);
     ent.body.stop();
   } else {
-    ent.body.at(this.arena.w - SIDE_MARGIN, this.arena.h / 2);
-    ent.body.stop();
-  }
-}
-
-World.prototype._doStart = function(ent) {
-  if (ent.left) {
-    ent.body.at(this.arena.w / 2 - SIDE_MARGIN, this.arena.h / 2);
-    ent.body.stop();
-  } else {
-    ent.body.at(this.arena.w / 2 + SIDE_MARGIN, this.arena.h / 2);
+    ent.body.at(this.arena.w - space, this.arena.h / 2);
     ent.body.stop();
   }
 }

@@ -11,9 +11,9 @@ var loop = (function() {
   function start() {
     screen = Screen.GAME;
     gameRunning = true;
-    world = new World(2800, 1500, 160);
+    world = new World(3200, 1600, 200);
     world.init();
-    renderer = graphics.setup(world);
+    renderer = graphics.init(world);
     tick();
   }
 
