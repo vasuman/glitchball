@@ -1,8 +1,8 @@
 /* exported graphics */
 /* global GameState, twgl, V, SHADERS, PLAYER_SIZE */
 
-var SCREEN_WIDTH = 1200;
-var SCREEN_HEIGHT = 600;
+var SCREEN_WIDTH = window.innerWidth - 20;
+var SCREEN_HEIGHT = window.innerHeight - 20;
 var FOV = 70;
 var NEAR_PLANE = 0.5;
 var FAR_PLANE = 10000;
@@ -50,47 +50,15 @@ function Drawer(world, root) {
 Drawer.prototype.draw = function() {
   this._updateHud();
   this.renderer.render();
-  //this.screen.draw(this._hud);
 }
 
 Drawer.prototype._updateHud = function() {
   this._hud.ctx.clearRect(0, 0, this._hud.width, this._hud.height);
-  this._drawHudScore(this.world.players[0], true);
-  this._drawHudScore(this.world.players[1], false);
-  this._drawHudCharge(this.world.players[0], true);
-  this._drawHudCharge(this.world.players[1], false);
+  this._drawPlayerInfo(this.world.players[0], true);
+  this._drawPlayerInfo(this.world.players[1], false);
 }
 
-Drawer.prototype._drawHudCharge = function(player, left) {
-  var r = player.charge / GLITCH_MIN_CHARGE;
-  var lightColor;
-  var color;
-  if (player.charge - GLITCH_MIN_CHARGE < 0) {
-    lightColor = '#aaa';
-    color = '#a22';
-    this._hud.ctx.shadowBlur = 5;
-  } else {
-    lightColor = '#fff';
-    color = '#2a2';
-    this._hud.ctx.shadowBlur = 20;
-  }
-  this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = color;
-  var y = this._hud.height - HUD_PAD - HUD_CHARGE_HEIGHT;
-  var width = Math.max(0, Math.round(player.charge / MAX_CHARGE * HUD_CHARGE_WIDTH));
-  var x = left ? HUD_PAD : this._hud.width - HUD_PAD - HUD_CHARGE_WIDTH;
-  this._hud.ctx.fillRect(x, y, width, HUD_CHARGE_HEIGHT);
-  this._hud.ctx.lineWidth = 1;
-  this._hud.ctx.strokeStyle = lightColor;
-  this._hud.ctx.strokeRect(x, y, HUD_CHARGE_WIDTH, HUD_CHARGE_HEIGHT);
-  this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = lightColor;
-  this._hud.ctx.font = HUD_CHARGE_FONT;
-  this._hud.ctx.textAlign = 'start';
-  this._hud.ctx.textBaseline = 'bottom';
-  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x, y);
-  this._hud.ctx.shadowBlur = 0;
-}
-
-Drawer.prototype._drawHudScore = function(player, left) {
+Drawer.prototype._drawPlayerInfo = function(player, left) {
   this._hud.ctx.fillStyle = 'white';
   this._hud.ctx.font = HUD_SCORE_FONT;
   this._hud.ctx.textBaseline = 'top';
@@ -98,9 +66,36 @@ Drawer.prototype._drawHudScore = function(player, left) {
   var x = left ? HUD_PAD : this._hud.width - HUD_PAD;
   var y = HUD_PAD;
   this._hud.ctx.fillText(player.score.toString(), x, y);
-}
-
-Drawer.prototype._setHudFont = function() {
+  var r = player.charge / GLITCH_MIN_CHARGE;
+  var lightColor;
+  var color;
+  if (player.state === PlayerState.SEEK) {
+    this.lightColor = '#aaa';
+    this.color = '#222';
+    this._hud.ctx.shadowBlur = 7;
+  } else if (player.charge - GLITCH_MIN_CHARGE < 0) {
+    this.lightColor = '#aaa';
+    this.color = '#a22';
+    this._hud.ctx.shadowBlur = 10;
+  } else {
+    this.lightColor = '#fff';
+    this.color = '#2a2';
+    this._hud.ctx.shadowBlur = 20;
+  }
+  this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = this.color;
+  var y = this._hud.height - HUD_PAD - HUD_CHARGE_HEIGHT;
+  var width = Math.max(0, Math.round(player.charge / PLAYER_MAX_CHARGE * HUD_CHARGE_WIDTH));
+  var x = left ? HUD_PAD : this._hud.width - HUD_PAD - HUD_CHARGE_WIDTH;
+  this._hud.ctx.fillRect(x, y, width, HUD_CHARGE_HEIGHT);
+  this._hud.ctx.strokeStyle = this._hud.ctx.fillStyle =
+    this._hud.ctx.shadowColor = this.lightColor;
+  this._hud.ctx.lineWidth = 1;
+  this._hud.ctx.strokeRect(x, y, HUD_CHARGE_WIDTH, HUD_CHARGE_HEIGHT);
+  this._hud.ctx.font = HUD_CHARGE_FONT;
+  this._hud.ctx.textAlign = 'start';
+  this._hud.ctx.textBaseline = 'bottom';
+  this._hud.ctx.fillText(HUD_CHARGE_TEXT, x, y);
+  this._hud.ctx.shadowBlur = 0;
 }
 
 Drawer.prototype._screenBuffer = function(initCtx) {
@@ -129,10 +124,17 @@ PerspectiveRenderer.prototype.render = function() {
   var time = Date.now();
   var gl = this.gl;
   var m4 = twgl.m4;
+  var target = this.world.glitch.target;
   // clear screen
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   if (this.world.state === GameState.GLITCH) {
-    this._tracked.push(this.world.glitch.pointer);
+    if (this.world.glitch.target.state === PlayerState.ATTACK) {
+      this._tracked.push(this.world.glitch.body.pos);
+    } else {
+      var idx = this.world.glitch.idx;
+      this._tracked.push(
+        this.world._latticePoint(idx[0], idx[1], target.left));
+    }
     this.camera.update(this._tracked);
     this._tracked.pop();
   } else {
@@ -140,21 +142,42 @@ PerspectiveRenderer.prototype.render = function() {
   }
   this._drawArena();
   gl.lineWidth(2);
-  this._spike.uniforms.u_wireRatio = 1.5;
-  this._spike.uniforms.u_bulb = 1;
-  this._spike.uniforms.u_color = [1, 1, 1, 1.0];
-  this._drawSpike(this.world.ball.body.pos, BALL_SIZE);
-  this._spike.uniforms.u_color = [1, 0, 0, 1.0];
-  this._drawSpike(this.world.players[0].body.pos, PLAYER_SIZE);
-  this._spike.uniforms.u_color = [0, 1, 0, 1.0];
-  this._drawSpike(this.world.players[1].body.pos, PLAYER_SIZE);
-  var glitch = this.world.glitch;
-  if (glitch.target) {
-    this._spike.uniforms.u_color = [1, 1, 0, 1.0];
-    this._spike.uniforms.u_bulb = 0.8;
-    this._spike.uniforms.u_wireRatio = 1;
-    this._drawSpike(glitch.pointer, PLAYER_SIZE);
+  gl.useProgram(this._spike.programInfo.program);
+  twgl.setBuffersAndAttributes(gl, this._spike.programInfo,
+    this._spike.bufferInfo);
+  this._spike.uniforms.u_worldViewProjection = this.camera.viewProjection;
+  this._drawItem(this.world.players[0]);
+  this._drawItem(this.world.players[1]);
+  this._drawItem(this.world.ball);
+  if (target) {
+    if (target.state == PlayerState.ATTACK) {
+      this._drawItem(this.world.glitch);
+    } else {
+      var idx = this.world.glitch.idx;
+      this._drawSpike(GLITCH_DRAW_PARAMS,
+        this.world._latticePoint(idx[0], idx[1], target.left));
+    }
   }
+}
+
+PerspectiveRenderer.prototype._drawItem = function(item) {
+  this._drawSpike(item.drawParams, item.body.pos);
+}
+
+PerspectiveRenderer.prototype._drawSpike = function(params, pos) {
+  pos.assignArray(this._spike.uniforms.u_point);
+  this._spike.offset.from(pos);
+  this._spike.offset.plus(MESH_SPACE - this._spike.meshSize / 2);
+  this._spike.offset.snapTo(MESH_SPACE * 2);
+  this._spike.offset.assignArray(this._spike.uniforms.u_offset);
+  this._spike.uniforms.u_bulb = params.bulb;
+  this._spike.uniforms.u_wireRatio = params.spread;
+  this._spike.uniforms.u_color = params.color;
+  this._spike.uniforms.u_coreSize = params.size;
+  twgl.setUniforms(this._spike.programInfo, this._spike.uniforms);
+  var gl = this.gl;
+  gl.drawElements(gl.LINE_STRIP, this._spike.bufferInfo.numElements,
+    gl.UNSIGNED_SHORT, 0);
 }
 
 PerspectiveRenderer.prototype._setupGL = function(can) {
@@ -195,44 +218,43 @@ PerspectiveRenderer.prototype._compilePrograms = function() {
       u_goalSize: this.world.goalSize
     }
   };
-  this._spike.programInfo = twgl.createProgramInfo(gl, [SHADERS.entVertex, SHADERS.entFragment]);
-  this._spike.bufferInfo = twgl.createBufferInfoFromArrays(gl, this._spikeAttributes());
+  this._spike.programInfo = twgl.createProgramInfo(gl,
+    [SHADERS.entVertex, SHADERS.entFragment]);
+  this._spike.bufferInfo = twgl.createBufferInfoFromArrays(gl,
+    this._spikeAttributes());
   this._arena = {
     uniforms: {
       u_color: [0, 0, 0, 0]
     }
   };
-  this._arena.programInfo = twgl.createProgramInfo(gl, [SHADERS.arenaVertex, SHADERS.arenaFragment]);
-  this._arena.bufferInfo = twgl.createBufferInfoFromArrays(gl, this._arenaAttributes());
-}
-
-PerspectiveRenderer.prototype._drawSpike = function(pos, size) {
-  var gl = this.gl;
-  gl.useProgram(this._spike.programInfo.program);
-  twgl.setBuffersAndAttributes(gl, this._spike.programInfo, this._spike.bufferInfo);
-  pos.assignArray(this._spike.uniforms.u_point);
-  this._spike.uniforms.u_worldViewProjection = this.camera.viewProjection;
-  this._spike.uniforms.u_coreSize = size;
-  this._spike.offset.from(pos);
-  this._spike.offset.plus(MESH_SPACE - this._spike.meshSize / 2);
-  this._spike.offset.snapTo(MESH_SPACE * 2);
-  this._spike.offset.assignArray(this._spike.uniforms.u_offset);
-  twgl.setUniforms(this._spike.programInfo, this._spike.uniforms);
-  gl.drawElements(gl.LINE_STRIP, this._spike.bufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
+  this._arena.programInfo = twgl.createProgramInfo(gl,
+    [SHADERS.arenaVertex, SHADERS.arenaFragment]);
+  this._arena.lines = twgl.createBufferInfoFromArrays(gl,
+    this._arenaLines());
+   this._arena.lattice = twgl.createBufferInfoFromArrays(gl,
+     this._arenaLattice());
+  // this._arena.border = twgl.createBufferInfoFromArrays(gl,
+  //   this._arenaBorder());
 }
 
 PerspectiveRenderer.prototype._drawArena = function() {
   var gl = this.gl;
   gl.useProgram(this._arena.programInfo.program);
-  twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.bufferInfo);
-  this._arena.uniforms.u_color = [0.4, 0.4, 1, 1];
+  twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lines);
   this._arena.uniforms.u_worldViewProjection = this.camera.viewProjection;
-  twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
-  gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 0);
-  gl.drawElements(gl.TRIANGLE_STRIP, 8, gl.UNSIGNED_SHORT, 16);
   this._arena.uniforms.u_color = [0.2, 0.2, 1, 0.5];
   twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
-  gl.drawElements(gl.LINE_STRIP, window._del || 15, gl.UNSIGNED_SHORT, 32);
+  var length = GLITCH_LATTICE.layers * 4 + 24;
+  gl.drawElements(gl.LINE_STRIP, length, gl.UNSIGNED_SHORT, 0);
+  var target = this.world.glitch.target;
+  twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lattice);
+  this._arena.uniforms.u_color = [1, 1, 1, 1.];
+  twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
+  if (target && target.state === PlayerState.DEFEND) {
+    var numPoints = this._arena.lattice.numElements;
+    var offset = target.left ? 0 : numPoints / 2;
+    gl.drawElements(gl.LINES, numPoints / 2, gl.UNSIGNED_SHORT, 0);
+  }
 }
 
 PerspectiveRenderer.prototype._spikeAttributes = function() {
@@ -247,16 +269,15 @@ PerspectiveRenderer.prototype._spikeAttributes = function() {
     position.push(0); // z
   }
 
+  function populateIndex(i, j) {
+    return indices.push(i + j * (k + 1));
+  }
+
   for (var i = 0; i <= k; i++) {
     for (var j = 0; j <= k; j++) {
       pushPoint(i, j);
     }
   }
-
-  function populateIndex(i, j) {
-    return indices.push(i + j * (k + 1));
-  }
-
   for (var i = 0; i < k; i += 2) {
     populateIndex(i, 0);
     for (var j = 0; j < k; j += 2) {
@@ -284,11 +305,39 @@ PerspectiveRenderer.prototype._spikeAttributes = function() {
   };
 }
 
-PerspectiveRenderer.prototype._arenaAttributes = function() {
+PerspectiveRenderer.prototype._arenaBorder = function() {
+  var position = [];
+  var indices = [];
+  return  {
+    postition: position,
+    indices: indices
+  };
+}
+
+PerspectiveRenderer.prototype._arenaLattice = function() {
+  var position = [];
+  var indices = [];
+  function addLatticePoint(i, j, p) {
+    position.push(p.x, p.y, 1);
+    position.push(p.x, p.y, 30);
+    var idx = indices.length;
+    indices.push(idx, idx + 1);
+  }
+  this.world._eachLattice(false, addLatticePoint);
+  return  {
+    position: position,
+    indices: indices
+  };
+}
+
+PerspectiveRenderer.prototype._arenaLines = function() {
   var w = this.world.arena.w;
   var h = this.world.arena.h;
   var gS = this.world.goalSize;
   var pad = BORDER_SIZE;
+  var angle = GLITCH_LATTICE.spread / 360 * Math.PI;
+  var dY = Math.tan(angle) * w / 2;
+  // TODO: cleanup unused points
   var position = [
     0, (h / 2 - gS), 0,
     0, 0, 0,
@@ -315,23 +364,48 @@ PerspectiveRenderer.prototype._arenaAttributes = function() {
     w, (h / 2 - gS), 0,
     w - gS, (h / 2 - gS), 0,
     w - gS, (h / 2 + gS), 0,
-    w, (h / 2 + gS), 0
+    w, (h / 2 + gS), 0,
+    w / 2, h / 2, 0,
+    w, h / 2 + dY, 0,
+    w, h / 2 - dY, 0,
+    0, h / 2 - dY, 0,
+    0, h / 2 + dY, 0,
+    w - gS, h / 2, 0,
+    gS, h / 2, 0,
   ];
   var indices = [
-    0, 8, 1, 9, 2, 10, 3, 11,
-    7, 15, 6, 14, 5, 13, 4, 12,
-    16, 17,
     5, 18, 19, 20, 21, 1,
-    2, 22, 23, 24, 25, 6, 17
+    2, 22, 23, 24, 25, 6,
+    27, 26, 31, 26, 28, 26,
+    29, 26, 32, 26, 30, 5,
+    6, 5
   ];
-  for (var i = 0; i < 8; i++) {
-    indices.push(i);
+
+  function addPoint(x, y) {
+    var idx = position.length / 3;
+    position.push(x, y, 0);
+    indices.push(idx);
+  }
+
+  var numLayers = 2 * GLITCH_LATTICE.layers;
+  var layerSep = this.world.arena.w / numLayers;
+  // vertical lines
+  for (var i = 1; i < numLayers; i++) {
+    var x = i * layerSep;
+    if (i % 2 === 0) {
+      addPoint(x, 0);
+      addPoint(x, h);
+    } else {
+      addPoint(x, h);
+      addPoint(x, 0);
+    }
   }
   return {
     position: {numComponents: 3, data: position},
     indices: indices,
   };
 }
+
 function Camera(aspectRatio) {
   this.aR = aspectRatio;
   this.focus = new V();

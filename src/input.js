@@ -20,7 +20,7 @@ var WSAD_KEY_MAP = {
 
 var InputAction = {
   MOVE: 1,
-  GLITCH_START: 2,
+  GLITCH_BEGIN: 2,
   GLITCH_END: 3
 };
 
@@ -33,7 +33,7 @@ function MoveEvent(source, direction) {
 
 function GlitchEvent(source, start) {
   this.type = EventType.INPUT;
-  this.action = start ? InputAction.GLITCH_START : InputAction.GLITCH_END;
+  this.action = start ? InputAction.GLITCH_BEGIN : InputAction.GLITCH_END;
   this.source = source;
 }
 
