@@ -6,17 +6,19 @@ var DELTA = 1 / 60;
 var BALL_MOVE_SMOOTH = 0.7;
 var VEL_ZERO = 0.05;
 var SIDE_MARGIN = 50;
-var PLAYER_DISCHARGE_RATIO = 0.5;
 var BALL_SIZE = 50;
 var BALL_PUSHBACK = 20000;
 var PLAYER_SPREAD = 1.6;
-var PLAYER_ACC = 700;
+var PLAYER_ACC = 1100;
+var PLAYER_ATTACHED_ACC = 900;
 var PLAYER_SIZE = 40;
 var PLAYER_FREEZE_DELAY = 100;
 var PLAYER_MAX_CHARGE = 500;
+var PLAYER_DISCHARGE_RATIO = 5;
+var PLAYER_DEFEND_HANDICAP = 0.7;
 var GLITCH_PAD = 10;
 var GLITCH_ACC = 1000;
-var GLITCH_MIN_CHARGE = 125;
+var GLITCH_MIN_CHARGE = PLAYER_MAX_CHARGE / 4;
 var GLITCH_DEFEND_THRESHOLD = 7;
 var GLITCH_DEFEND_INTERVAL = 20;
 var GLITCH_DEFEND_SPACING = 800;
@@ -115,6 +117,8 @@ function Player(left) {
 }
 
 Player.prototype.discharge = function() {
+  var handicap = (this.state === PlayerState.DEFEND) ?
+    PLAYER_DEFEND_HANDICAP : 1;
   this.charge -= PLAYER_DISCHARGE_RATIO;
   return this.charge <= 0;
 }
@@ -130,8 +134,6 @@ Player.prototype.update = function() {
   if (this.charge < PLAYER_MAX_CHARGE) {
     this.charge += 1;
   }
-  this.body.acc.normalize();
-  this.body.acc.scale(PLAYER_ACC);
   this.body.update();
 }
 
@@ -245,13 +247,17 @@ World.prototype._initEntities = function() {
 }
 
 World.prototype._updatePlayers = function() {
-  var pushF = 1;
   for (var i = 0; i < this.players.length; i++) {
     var player = this.players[i];
+    var attached = (this.ball.attached === player);
+    var acc = attached ? PLAYER_ATTACHED_ACC : PLAYER_ACC;
+    player.body.acc.normalize();
+    player.body.acc.scale(acc);
     player.update();
     // kill out of bounds player
     if (!this.arena.within(player.body.pos)) {
-      if (this.ball.attached === player) {
+      if (attached) {
+        var pushF = 1;
         if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
           if ((!player.left && player.body.pos.x < 0) ||
               (player.left && player.body.pos.x > this.arena.w)) {
@@ -349,7 +355,18 @@ World.prototype._initLattice = function(target) {
   if (!target.left) {
     dX = Math.abs(dX);
   }
-  this.glitch.idx = [0, 0];
+  var minDist = Infinity;
+  var idx = this.glitch.idx;
+  idx[0] = idx[1] = 0;
+  this._eachLattice(target.left, function(i, j, p) {
+    p.sub(target.body.pos);
+    var len = p.length();
+    if (len < minDist) {
+      minDist = len;
+      idx[0] = i;
+      idx[1] = j;
+    }
+  });
 }
 
 World.prototype._moveLattice = function(dir) {
@@ -386,7 +403,6 @@ World.prototype._eachLattice = function(left, f) {
     }
   }
 }
-
 
 World.prototype._latticePoint = function(i, j, left) {
   var pos = this._latticeV;

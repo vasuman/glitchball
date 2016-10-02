@@ -155,6 +155,10 @@ var FAR_PLANE = 1e4;
 
 var MESH_SPACE = 20;
 
+var LATTICE_STRUCT_WIDTH = 20;
+
+var LATTICE_STRUCT_HEIGHT = 30;
+
 var BORDER_SIZE = 10;
 
 var CAM_SMOOTHNESS = .75;
@@ -180,6 +184,10 @@ var HUD_CHARGE_HEIGHT = 20;
 var HUD_CHARGE_TEXT = "Glitch";
 
 var HUD_CHARGE_FONT = "12px sans-serif";
+
+var ARENA_LINE_COLOR = [ .2, .2, .8, .5 ];
+
+var ARENA_LATTICE_COLOR = [ .4, .4, .8, .5 ];
 
 var graphics = function() {
     var root;
@@ -216,11 +224,12 @@ Drawer.prototype._updateHud = function() {
 };
 
 Drawer.prototype._drawPlayerInfo = function(player, left) {
+    var w = this._hud.width;
     this._hud.ctx.fillStyle = "white";
     this._hud.ctx.font = HUD_SCORE_FONT;
     this._hud.ctx.textBaseline = "top";
-    this._hud.ctx.textAlign = left ? "start" : "end";
-    var x = left ? HUD_PAD : this._hud.width - HUD_PAD;
+    this._hud.ctx.textAlign = left ? "end" : "start";
+    var x = left ? w / 2 - HUD_PAD : w / 2 + HUD_PAD;
     var y = HUD_PAD;
     this._hud.ctx.fillText(player.score.toString(), x, y);
     var r = player.charge / GLITCH_MIN_CHARGE;
@@ -240,9 +249,9 @@ Drawer.prototype._drawPlayerInfo = function(player, left) {
         this._hud.ctx.shadowBlur = 20;
     }
     this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = this.color;
-    var y = this._hud.height - HUD_PAD - HUD_CHARGE_HEIGHT;
+    var y = HUD_PAD + HUD_CHARGE_HEIGHT;
     var width = Math.max(0, Math.round(player.charge / PLAYER_MAX_CHARGE * HUD_CHARGE_WIDTH));
-    var x = left ? HUD_PAD : this._hud.width - HUD_PAD - HUD_CHARGE_WIDTH;
+    var x = left ? HUD_PAD : w - HUD_PAD - HUD_CHARGE_WIDTH;
     this._hud.ctx.fillRect(x, y, width, HUD_CHARGE_HEIGHT);
     this._hud.ctx.strokeStyle = this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = this.lightColor;
     this._hud.ctx.lineWidth = 1;
@@ -345,7 +354,6 @@ PerspectiveRenderer.prototype._setupGL = function(can) {
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.clearColor(0, 0, 0, 1);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    window._gl = gl;
 };
 
 PerspectiveRenderer.prototype._setupCamera = function(can) {
@@ -389,18 +397,18 @@ PerspectiveRenderer.prototype._drawArena = function() {
     gl.useProgram(this._arena.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lines);
     this._arena.uniforms.u_worldViewProjection = this.camera.viewProjection;
-    this._arena.uniforms.u_color = [ .2, .2, 1, .5 ];
+    this._arena.uniforms.u_color = ARENA_LINE_COLOR;
     twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
     var length = GLITCH_LATTICE.layers * 4 + 24;
     gl.drawElements(gl.LINE_STRIP, length, gl.UNSIGNED_SHORT, 0);
     var target = this.world.glitch.target;
-    twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lattice);
-    this._arena.uniforms.u_color = [ 1, 1, 1, 1 ];
-    twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
     if (target && target.state === PlayerState.DEFEND) {
-        var numPoints = this._arena.lattice.numElements;
-        var offset = target.left ? 0 : numPoints / 2;
-        gl.drawElements(gl.LINES, numPoints / 2, gl.UNSIGNED_SHORT, 0);
+        twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lattice);
+        this._arena.uniforms.u_color = ARENA_LATTICE_COLOR;
+        twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
+        var n = this._arena.lattice.numElements;
+        var offset = target.left ? n : 0;
+        gl.drawElements(gl.LINES, n / 2, gl.UNSIGNED_SHORT, offset);
     }
 };
 
@@ -461,13 +469,31 @@ PerspectiveRenderer.prototype._arenaBorder = function() {
 PerspectiveRenderer.prototype._arenaLattice = function() {
     var position = [];
     var indices = [];
-    function addLatticePoint(i, j, p) {
-        position.push(p.x, p.y, 1);
-        position.push(p.x, p.y, 30);
+    function vertEdge(x, y, dx, dy) {
+        position.push(x + dx, y + dy, 1);
+        position.push(x, y, LATTICE_STRUCT_HEIGHT);
         var idx = indices.length;
         indices.push(idx, idx + 1);
     }
-    this.world._eachLattice(false, addLatticePoint);
+    function flatEdge(x, y, dx, dy) {
+        position.push(x + dx, y, 1);
+        position.push(x, y + dy, 1);
+        var idx = indices.length;
+        indices.push(idx, idx + 1);
+    }
+    function latticeStruct(i, j, p) {
+        var d = LATTICE_STRUCT_WIDTH;
+        vertEdge(p.x, p.y, 0, d);
+        vertEdge(p.x, p.y, 0, -d);
+        vertEdge(p.x, p.y, d, 0);
+        vertEdge(p.x, p.y, -d, 0);
+        flatEdge(p.x, p.y, -d, d);
+        flatEdge(p.x, p.y, -d, -d);
+        flatEdge(p.x, p.y, d, d);
+        flatEdge(p.x, p.y, d, -d);
+    }
+    this.world._eachLattice(false, latticeStruct);
+    this.world._eachLattice(true, latticeStruct);
     return {
         position: position,
         indices: indices
@@ -667,29 +693,28 @@ var input = function() {
     };
 }();
 
-var Screen = {
-    GAME: 1
-};
-
 var loop = function() {
-    var screen, world, renderer, gameRunning;
+    var world, renderer, gameRunning;
     function start() {
-        screen = Screen.GAME;
         gameRunning = true;
         world = new World(3600, 2400, 200);
         world.init();
         renderer = graphics.init(world);
         tick();
+        window._world = world;
+        window._renderer = renderer;
     }
     function tick() {
-        if (screen === Screen.GAME) {
+        if (gameRunning) {
             world.process(input.poll());
             world.step(1 / 60);
             renderer.draw();
-            if (gameRunning) {
-                window.requestAnimationFrame(tick);
-            }
+            window.requestAnimationFrame(tick);
         }
+    }
+    function stop() {
+        gameRunning = false;
+        renderer.destroy();
     }
     return {
         start: start,
@@ -709,8 +734,8 @@ window.addEventListener("load", main);
 var SHADERS = {
     entVertex: "precision mediump float;\n\nconst float goalFactor = 2.;\nconst float mixPow = 2.;\nconst vec4 black = vec4(0., 0., 0., 1.0);\nconst vec4 yellow = vec4(0., 0., 1., 1.0);\n\nuniform vec3 u_offset;\nuniform vec3 u_point;\nuniform float u_coreSize;\nuniform vec4 u_color;\nuniform mat4 u_worldViewProjection;\nuniform vec2 u_boundMin;\nuniform vec2 u_boundMax;\nuniform float u_bulb;\nuniform float u_wireRatio;\nuniform float u_goalSize;\n\nattribute vec3 a_position;\n\nvarying vec4 v_color;\n\nvoid main() {\n    float wireRadius = u_coreSize * u_wireRatio;\n    float halfX = (u_boundMin.x + u_boundMax.x) / 2.;\n    float halfY = (u_boundMin.y + u_boundMax.y) / 2.;\n    vec4 pos = vec4(a_position + u_offset, 1.0);\n    float dist = abs(length(a_position - (u_point - u_offset)));\n    float influence = 0.0;\n    v_color = black;\n    if (pos.x > u_boundMin.x && pos.y > u_boundMin.y && pos.x < u_boundMax.x && pos.y < u_boundMax.y) {\n        if (dist < u_coreSize) {\n            influence = sqrt(pow(u_coreSize, 2.0) - pow(dist, 2.0)) / u_coreSize;\n        }\n        if (dist < wireRadius) {\n            float frac = dist / wireRadius;\n            influence += 0.1 * (1. - frac);\n            vec4 color = u_color;\n            float mirX = (pos.x > halfX) ? u_boundMax.x - pos.x : pos.x;\n            float mirY = (pos.y > halfY) ?  pos.y - halfY : halfY - pos.y;\n            if (mirX <= u_goalSize && mirY <= u_goalSize) {\n                color = mix(color, yellow, 0.5);\n                influence *= goalFactor * pow(max(mirX, mirY) / u_goalSize, 2.);\n            }\n            v_color = mix(color, black, pow(frac, mixPow));\n        }\n        pos.z += influence * u_coreSize * u_bulb;\n    }\n    gl_Position = u_worldViewProjection * pos;\n}\n",
     entFragment: "precision mediump float;\n\nvarying vec4 v_color;\n\nvoid main() {\n    gl_FragColor = v_color;\n}\n",
-    arenaVertex: "precision mediump float;\n\nattribute vec3 a_position;\n\nuniform mat4 u_worldViewProjection;\n\nvarying float v_height;\n\nvoid main() {\n    v_height = a_position.z;\n    gl_Position = u_worldViewProjection * vec4(a_position.xyz, 1.);\n}\n\n",
-    arenaFragment: "precision mediump float;\n\nconst vec4 white = vec4(1., 1., 1., 1.0);\nuniform vec4 u_color;\n\nvarying float v_height;\n\nvoid main() {\n    gl_FragColor = mix(u_color, white, v_height);\n}\n"
+    arenaVertex: "precision mediump float;\n\nattribute vec3 a_position;\n\nuniform mat4 u_worldViewProjection;\n\nvoid main() {\n    gl_Position = u_worldViewProjection * vec4(a_position.xyz, 1.);\n}\n\n",
+    arenaFragment: "precision mediump float;\n\nuniform vec4 u_color;\n\nvoid main() {\n    gl_FragColor = u_color;\n}\n"
 };
 
 (function(root, factory) {
@@ -4682,15 +4707,15 @@ var VEL_ZERO = .05;
 
 var SIDE_MARGIN = 50;
 
-var PLAYER_DISCHARGE_RATIO = .5;
-
 var BALL_SIZE = 50;
 
 var BALL_PUSHBACK = 2e4;
 
 var PLAYER_SPREAD = 1.6;
 
-var PLAYER_ACC = 700;
+var PLAYER_ACC = 1100;
+
+var PLAYER_ATTACHED_ACC = 900;
 
 var PLAYER_SIZE = 40;
 
@@ -4698,11 +4723,15 @@ var PLAYER_FREEZE_DELAY = 100;
 
 var PLAYER_MAX_CHARGE = 500;
 
+var PLAYER_DISCHARGE_RATIO = 5;
+
+var PLAYER_DEFEND_HANDICAP = .7;
+
 var GLITCH_PAD = 10;
 
 var GLITCH_ACC = 1e3;
 
-var GLITCH_MIN_CHARGE = 125;
+var GLITCH_MIN_CHARGE = PLAYER_MAX_CHARGE / 4;
 
 var GLITCH_DEFEND_THRESHOLD = 7;
 
@@ -4807,6 +4836,7 @@ function Player(left) {
 }
 
 Player.prototype.discharge = function() {
+    var handicap = this.state === PlayerState.DEFEND ? PLAYER_DEFEND_HANDICAP : 1;
     this.charge -= PLAYER_DISCHARGE_RATIO;
     return this.charge <= 0;
 };
@@ -4822,8 +4852,6 @@ Player.prototype.update = function() {
     if (this.charge < PLAYER_MAX_CHARGE) {
         this.charge += 1;
     }
-    this.body.acc.normalize();
-    this.body.acc.scale(PLAYER_ACC);
     this.body.update();
 };
 
@@ -4938,12 +4966,16 @@ World.prototype._initEntities = function() {
 };
 
 World.prototype._updatePlayers = function() {
-    var pushF = 1;
     for (var i = 0; i < this.players.length; i++) {
         var player = this.players[i];
+        var attached = this.ball.attached === player;
+        var acc = attached ? PLAYER_ATTACHED_ACC : PLAYER_ACC;
+        player.body.acc.normalize();
+        player.body.acc.scale(acc);
         player.update();
         if (!this.arena.within(player.body.pos)) {
-            if (this.ball.attached === player) {
+            if (attached) {
+                var pushF = 1;
                 if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
                     if (!player.left && player.body.pos.x < 0 || player.left && player.body.pos.x > this.arena.w) {
                         player.score += 1;
@@ -5036,7 +5068,18 @@ World.prototype._initLattice = function(target) {
     if (!target.left) {
         dX = Math.abs(dX);
     }
-    this.glitch.idx = [ 0, 0 ];
+    var minDist = Infinity;
+    var idx = this.glitch.idx;
+    idx[0] = idx[1] = 0;
+    this._eachLattice(target.left, function(i, j, p) {
+        p.sub(target.body.pos);
+        var len = p.length();
+        if (len < minDist) {
+            minDist = len;
+            idx[0] = i;
+            idx[1] = j;
+        }
+    });
 };
 
 World.prototype._moveLattice = function(dir) {

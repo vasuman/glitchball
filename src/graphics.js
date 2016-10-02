@@ -7,6 +7,8 @@ var FOV = 70;
 var NEAR_PLANE = 0.5;
 var FAR_PLANE = 10000;
 var MESH_SPACE = 20;
+var LATTICE_STRUCT_WIDTH = 20;
+var LATTICE_STRUCT_HEIGHT = 30;
 var BORDER_SIZE = 10;
 var CAM_SMOOTHNESS = 0.75;
 var CAM_INCLINATION = 30;
@@ -20,6 +22,8 @@ var HUD_CHARGE_MIX = 20;
 var HUD_CHARGE_HEIGHT = 20;
 var HUD_CHARGE_TEXT = 'Glitch';
 var HUD_CHARGE_FONT = '12px sans-serif';
+var ARENA_LINE_COLOR = [0.2, 0.2, 0.8, 0.5];
+var ARENA_LATTICE_COLOR = [0.4, 0.4, 0.8, 0.5];
 
 var graphics = (function() {
   var root;
@@ -59,11 +63,12 @@ Drawer.prototype._updateHud = function() {
 }
 
 Drawer.prototype._drawPlayerInfo = function(player, left) {
+  var w = this._hud.width;
   this._hud.ctx.fillStyle = 'white';
   this._hud.ctx.font = HUD_SCORE_FONT;
   this._hud.ctx.textBaseline = 'top';
-  this._hud.ctx.textAlign = left ? 'start' : 'end';
-  var x = left ? HUD_PAD : this._hud.width - HUD_PAD;
+  this._hud.ctx.textAlign = left ? 'end' : 'start';
+  var x = left ? w / 2 - HUD_PAD : w / 2 + HUD_PAD;
   var y = HUD_PAD;
   this._hud.ctx.fillText(player.score.toString(), x, y);
   var r = player.charge / GLITCH_MIN_CHARGE;
@@ -83,9 +88,9 @@ Drawer.prototype._drawPlayerInfo = function(player, left) {
     this._hud.ctx.shadowBlur = 20;
   }
   this._hud.ctx.fillStyle = this._hud.ctx.shadowColor = this.color;
-  var y = this._hud.height - HUD_PAD - HUD_CHARGE_HEIGHT;
+  var y = HUD_PAD + HUD_CHARGE_HEIGHT;
   var width = Math.max(0, Math.round(player.charge / PLAYER_MAX_CHARGE * HUD_CHARGE_WIDTH));
-  var x = left ? HUD_PAD : this._hud.width - HUD_PAD - HUD_CHARGE_WIDTH;
+  var x = left ? HUD_PAD : w - HUD_PAD - HUD_CHARGE_WIDTH;
   this._hud.ctx.fillRect(x, y, width, HUD_CHARGE_HEIGHT);
   this._hud.ctx.strokeStyle = this._hud.ctx.fillStyle =
     this._hud.ctx.shadowColor = this.lightColor;
@@ -190,8 +195,6 @@ PerspectiveRenderer.prototype._setupGL = function(can) {
   gl.blendFunc(gl.ONE, gl.ONE);
   gl.clearColor(0, 0, 0, 1.0);
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  // FIXME
-  window._gl = gl;
 }
 
 PerspectiveRenderer.prototype._setupCamera = function(can) {
@@ -242,18 +245,18 @@ PerspectiveRenderer.prototype._drawArena = function() {
   gl.useProgram(this._arena.programInfo.program);
   twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lines);
   this._arena.uniforms.u_worldViewProjection = this.camera.viewProjection;
-  this._arena.uniforms.u_color = [0.2, 0.2, 1, 0.5];
+  this._arena.uniforms.u_color = ARENA_LINE_COLOR;
   twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
   var length = GLITCH_LATTICE.layers * 4 + 24;
   gl.drawElements(gl.LINE_STRIP, length, gl.UNSIGNED_SHORT, 0);
   var target = this.world.glitch.target;
-  twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lattice);
-  this._arena.uniforms.u_color = [1, 1, 1, 1.];
-  twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
   if (target && target.state === PlayerState.DEFEND) {
-    var numPoints = this._arena.lattice.numElements;
-    var offset = target.left ? 0 : numPoints / 2;
-    gl.drawElements(gl.LINES, numPoints / 2, gl.UNSIGNED_SHORT, 0);
+    twgl.setBuffersAndAttributes(gl, this._arena.programInfo, this._arena.lattice);
+    this._arena.uniforms.u_color = ARENA_LATTICE_COLOR;
+    twgl.setUniforms(this._arena.programInfo, this._arena.uniforms);
+    var n = this._arena.lattice.numElements;
+    var offset = target.left ? n : 0;
+    gl.drawElements(gl.LINES, n / 2, gl.UNSIGNED_SHORT, offset);
   }
 }
 
@@ -317,13 +320,38 @@ PerspectiveRenderer.prototype._arenaBorder = function() {
 PerspectiveRenderer.prototype._arenaLattice = function() {
   var position = [];
   var indices = [];
-  function addLatticePoint(i, j, p) {
-    position.push(p.x, p.y, 1);
-    position.push(p.x, p.y, 30);
+
+  function vertEdge(x, y, dx, dy) {
+    position.push(x + dx, y + dy, 1);
+    position.push(x, y, LATTICE_STRUCT_HEIGHT);
     var idx = indices.length;
     indices.push(idx, idx + 1);
   }
-  this.world._eachLattice(false, addLatticePoint);
+
+  function flatEdge(x, y, dx, dy) {
+    position.push(x + dx, y, 1);
+    position.push(x, y + dy, 1);
+    var idx = indices.length;
+    indices.push(idx, idx + 1);
+  }
+
+  function latticeStruct(i, j, p) {
+    var d = LATTICE_STRUCT_WIDTH;
+    vertEdge(p.x, p.y, 0, d);
+    vertEdge(p.x, p.y, 0, -d);
+    vertEdge(p.x, p.y, d, 0);
+    vertEdge(p.x, p.y, -d, 0);
+    flatEdge(p.x, p.y, -d, d);
+    flatEdge(p.x, p.y, -d, -d);
+    flatEdge(p.x, p.y, d, d);
+    flatEdge(p.x, p.y, d, -d);
+    // flatEdge(p.x, p.y, 0, -d);
+    // flatEdge(p.x, p.y, d, 0);
+    // flatEdge(p.x, p.y, -d, 0);
+  }
+
+  this.world._eachLattice(false, latticeStruct);
+  this.world._eachLattice(true, latticeStruct);
   return  {
     position: position,
     indices: indices
