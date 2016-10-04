@@ -1,8 +1,8 @@
 /* exported graphics */
 /* global GameState, twgl, V, SHADERS, PLAYER_SIZE */
 
-var SCREEN_WIDTH = window.innerWidth - 20;
-var SCREEN_HEIGHT = window.innerHeight - 20;
+var SCREEN_WIDTH = window.innerWidth;
+var SCREEN_HEIGHT = window.innerHeight;
 var FOV = 70;
 var NEAR_PLANE = 0.5;
 var FAR_PLANE = 10000;
@@ -16,10 +16,10 @@ var CAM_ELEVATION = 1;
 var CAM_MIN_SCALE = 300;
 var CAM_SCALE_ADJ = 2;
 var HUD_PAD = 15;
-var HUD_SCORE_FONT = '36px Futura';
-var HUD_CHARGE_WIDTH = 200;
+var HUD_SCORE_FONT = '40px monospace';
+var HUD_CHARGE_WIDTH = 300;
 var HUD_CHARGE_MIX = 20;
-var HUD_CHARGE_HEIGHT = 20;
+var HUD_CHARGE_HEIGHT = 30;
 var HUD_CHARGE_TEXT = 'Glitch';
 var HUD_CHARGE_FONT = '12px sans-serif';
 var ARENA_LINE_COLOR = [0.2, 0.2, 0.8, 0.5];
@@ -52,14 +52,22 @@ function Drawer(world, root) {
 }
 
 Drawer.prototype.draw = function() {
-  this._updateHud();
+  this._drawHud();
   this.renderer.render();
 }
 
-Drawer.prototype._updateHud = function() {
+Drawer.prototype._drawHud = function() {
   this._hud.ctx.clearRect(0, 0, this._hud.width, this._hud.height);
   this._drawPlayerInfo(this.world.players[0], true);
   this._drawPlayerInfo(this.world.players[1], false);
+  // draw seperartor
+  var x = this._hud.width / 2;
+  var y = HUD_PAD + HUD_CHARGE_HEIGHT;
+  this._hud.ctx.fillStyle = 'white';
+  this._hud.ctx.font = HUD_SCORE_FONT;
+  this._hud.ctx.textBaseline = 'top';
+  this._hud.ctx.textAlign = 'center';
+  this._hud.ctx.fillText('-', x, y);
 }
 
 Drawer.prototype._drawPlayerInfo = function(player, left) {
@@ -69,7 +77,7 @@ Drawer.prototype._drawPlayerInfo = function(player, left) {
   this._hud.ctx.textBaseline = 'top';
   this._hud.ctx.textAlign = left ? 'end' : 'start';
   var x = left ? w / 2 - HUD_PAD : w / 2 + HUD_PAD;
-  var y = HUD_PAD;
+  var y = HUD_PAD + HUD_CHARGE_HEIGHT;
   this._hud.ctx.fillText(player.score.toString(), x, y);
   var r = player.charge / GLITCH_MIN_CHARGE;
   var lightColor;

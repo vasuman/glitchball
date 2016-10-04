@@ -3,32 +3,34 @@
 
 var DAMPENING = 0.96;
 var DELTA = 1 / 60;
-var BALL_MOVE_SMOOTH = 0.7;
 var VEL_ZERO = 0.05;
 var SIDE_MARGIN = 50;
 var BALL_SIZE = 50;
-var BALL_PUSHBACK = 20000;
+var BALL_PUSHBACK = 400;
+var BALL_MOVE_SMOOTH = 0.6;
 var PLAYER_SPREAD = 1.6;
 var PLAYER_ACC = 1100;
 var PLAYER_ATTACHED_ACC = 900;
 var PLAYER_SIZE = 40;
 var PLAYER_FREEZE_DELAY = 100;
-var PLAYER_MAX_CHARGE = 500;
-var PLAYER_DISCHARGE_RATIO = 5;
-var PLAYER_DEFEND_HANDICAP = 0.7;
+var PLAYER_MAX_CHARGE = 600;
+var PLAYER_DISCHARGE_RATIO = 6;
+var PLAYER_DEFEND_HANDICAP = 0.5;
 var GLITCH_PAD = 10;
 var GLITCH_ACC = 1000;
 var GLITCH_MIN_CHARGE = PLAYER_MAX_CHARGE / 4;
+var GLITCH_DEFEND_TAX = PLAYER_MAX_CHARGE / 6;
 var GLITCH_DEFEND_THRESHOLD = 7;
-var GLITCH_DEFEND_INTERVAL = 20;
 var GLITCH_DEFEND_SPACING = 800;
 var GLITCH_SMOOTH_MOVE = 0.9;
+
 var GLITCH_DRAW_PARAMS = {
       color: [1, 1, 1, 1.0],
       size: PLAYER_SIZE,
       bulb: 1,
       spread: 1.4
 };
+
 var GLITCH_LATTICE = {
   layers: 4,
   spread: 60,
@@ -71,11 +73,8 @@ Body.prototype.stop = function() {
   this.acc.clear();
 }
 
-Body.prototype.pushIn = function(dir) {
-  this.acc.fromDirection(dir);
-}
-
 Body.prototype.at = function(x, y) {
+  this.stop();
   this.pos.set(x, y);
   this._reBound();
 }
@@ -92,7 +91,6 @@ Body.prototype.update = function() {
   if (this.vel.length() < VEL_ZERO) {
     this.vel.clear();
   }
-  this.acc.clear();
   this._reBound();
 }
 
@@ -102,6 +100,7 @@ Body.prototype._reBound = function() {
 
 function Player(left) {
   this.left = left;
+  this.directions = [];
   this.charge = PLAYER_MAX_CHARGE;
   this.body = new Body(PLAYER_SIZE);
   this.score = 0;
@@ -112,14 +111,25 @@ function Player(left) {
     color: color,
     size: PLAYER_SIZE,
     bulb: 1,
-    spread: 1.5
+    spread: 1
   };
+}
+
+Player.prototype.moveIn = function(dir) {
+  this.directions.push(dir);
+}
+
+Player.prototype.stopIn = function(dir) {
+  var idx = this.directions.indexOf(dir);
+  if (idx > -1) {
+    this.directions.splice(idx, 1);
+  }
 }
 
 Player.prototype.discharge = function() {
   var handicap = (this.state === PlayerState.DEFEND) ?
     PLAYER_DEFEND_HANDICAP : 1;
-  this.charge -= PLAYER_DISCHARGE_RATIO;
+  this.charge -= handicap * PLAYER_DISCHARGE_RATIO;
   return this.charge <= 0;
 }
 
@@ -134,17 +144,30 @@ Player.prototype.update = function() {
   if (this.charge < PLAYER_MAX_CHARGE) {
     this.charge += 1;
   }
+  this._getAcc();
   this.body.update();
 }
 
 Player.prototype.canGlitch = function() {
-  return this.state !== PlayerState.SEEK && this.charge > GLITCH_MIN_CHARGE && this.frozen <= 0;
+  return (this.state !== PlayerState.SEEK) &&
+    (this.charge > GLITCH_MIN_CHARGE) && (this.frozen <= 0);
 }
 
 Player.prototype.freeze = function() {
   this.frozen = PLAYER_FREEZE_DELAY;
   this.drawParams.bulb = 0;
   this.drawParams.spread = 0;
+}
+
+Player.prototype._getAcc = function() {
+  this.body.acc.clear();
+  for (var i = 0; i < this.directions.length; i++) {
+    var dir = this.directions[i];
+    this.body.acc.fromDirection(dir);
+  }
+  this.body.acc.normalize();
+  this.body.acc.scale(GLITCH_ACC);
+  return this.body.acc;
 }
 
 var GameState = {
@@ -163,7 +186,6 @@ function World(width, height, goalSize) {
     target: null,
     body: new Body(PLAYER_SIZE),
     idx: [0, 0],
-    last: 0,
     drawParams: GLITCH_DRAW_PARAMS
   };
   this._latticeV = new V();
@@ -203,15 +225,17 @@ World.prototype.step = function() {
 World.prototype.handleInput = function(inputEvent) {
   var target = this._getTarget(inputEvent.source);
   switch (inputEvent.action) {
-      case InputAction.MOVE:
-          if (this.state === GameState.FREE) {
-            target.body.pushIn(inputEvent.direction);
-          } else if (this.state === GameState.GLITCH) {
-            if (target === this.glitch.target) {
-              this._moveGlitch(inputEvent.direction);
+      case InputAction.MOVE_BEGIN:
+        target.moveIn(inputEvent.direction);
+        if (this.state === GameState.GLITCH && target === this.glitch.target) {
+            if (target.state === PlayerState.DEFEND) {
+              this._moveLattice(inputEvent.direction);
             }
-          }
-          break;
+        }
+        break;
+      case InputAction.MOVE_END:
+        target.stopIn(inputEvent.direction);
+        break;
       case InputAction.GLITCH_BEGIN:
           if (this.state === GameState.FREE) {
             if (target.canGlitch()) {
@@ -249,14 +273,10 @@ World.prototype._initEntities = function() {
 World.prototype._updatePlayers = function() {
   for (var i = 0; i < this.players.length; i++) {
     var player = this.players[i];
-    var attached = (this.ball.attached === player);
-    var acc = attached ? PLAYER_ATTACHED_ACC : PLAYER_ACC;
-    player.body.acc.normalize();
-    player.body.acc.scale(acc);
     player.update();
     // kill out of bounds player
     if (!this.arena.within(player.body.pos)) {
-      if (attached) {
+      if (this.ball.attached === player) {
         var pushF = 1;
         if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
           if ((!player.left && player.body.pos.x < 0) ||
@@ -266,10 +286,10 @@ World.prototype._updatePlayers = function() {
           }
         }
         // push toward center
-        this.arena.center(this.ball.body.acc);
-        this.ball.body.acc.sub(this.ball.body.pos);
-        this.ball.body.acc.normalize();
-        this.ball.body.acc.scale(pushF * BALL_PUSHBACK);
+        this.arena.center(this.ball.body.vel);
+        this.ball.body.vel.sub(this.ball.body.pos);
+        this.ball.body.vel.normalize();
+        this.ball.body.vel.scale(pushF * BALL_PUSHBACK);
         this._endPlay();
       }
       this._doSpawn(player);
@@ -308,15 +328,8 @@ World.prototype._beginGlitch = function(target) {
   this.glitch.target = target;
   this.glitch.body.from(target.body);
   if (target.state === PlayerState.DEFEND) {
+    target.charge -= GLITCH_DEFEND_TAX;
     this._initLattice(target);
-  }
-}
-
-World.prototype._moveGlitch = function(dir) {
-  if (this.glitch.target.state === PlayerState.ATTACK) {
-    this.glitch.body.pushIn(dir);
-  } else {
-    this._moveLattice(dir);
   }
 }
 
@@ -328,8 +341,7 @@ World.prototype._updateGlitch = function() {
   }
   if (target.state === PlayerState.ATTACK) {
     var body = this.glitch.body;
-    body.acc.normalize();
-    body.acc.scale(GLITCH_ACC);
+    body.acc.from(target._getAcc());
     body.update();
   }
 }
@@ -349,7 +361,6 @@ World.prototype._endGlitch = function() {
 }
 
 World.prototype._initLattice = function(target) {
-  this.glitch.last = 0;
   var pos = target.body.pos;
   var dX = this.arena.w / 2 - pos.x;
   if (!target.left) {
@@ -370,9 +381,6 @@ World.prototype._initLattice = function(target) {
 }
 
 World.prototype._moveLattice = function(dir) {
-  if (this.tick - this.glitch.last < GLITCH_DEFEND_INTERVAL) {
-    return;
-  }
   var idx = this.glitch.idx;
   var n = GLITCH_LATTICE.layers;
   var ent = this.glitch.target;
@@ -391,7 +399,6 @@ World.prototype._moveLattice = function(dir) {
   } else {
     throw new Error('unknown case');
   }
-  this.glitch.last = this.tick;
 }
 
 World.prototype._eachLattice = function(left, f) {
@@ -460,10 +467,8 @@ World.prototype._doSpawn = function(ent) {
   var space = this.goalSize + SIDE_MARGIN;
   if (ent.left) {
     ent.body.at(space, this.arena.h / 2);
-    ent.body.stop();
   } else {
     ent.body.at(this.arena.w - space, this.arena.h / 2);
-    ent.body.stop();
   }
 }
 
@@ -472,9 +477,7 @@ World.prototype._doStart = function(ent) {
   var space = this.goalSize + SIDE_MARGIN;
   if (ent.left) {
     ent.body.at(this.arena.w / 2 - space, this.arena.h / 2);
-    ent.body.stop();
   } else {
     ent.body.at(this.arena.w / 2 + space, this.arena.h / 2);
-    ent.body.stop();
   }
 }

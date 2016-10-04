@@ -143,9 +143,9 @@ Box.prototype.within = function(v) {
     return this.x <= v.x && v.x <= this.x + this.w && this.y <= v.y && v.y <= this.y + this.h;
 };
 
-var SCREEN_WIDTH = window.innerWidth - 20;
+var SCREEN_WIDTH = window.innerWidth;
 
-var SCREEN_HEIGHT = window.innerHeight - 20;
+var SCREEN_HEIGHT = window.innerHeight;
 
 var FOV = 70;
 
@@ -173,13 +173,13 @@ var CAM_SCALE_ADJ = 2;
 
 var HUD_PAD = 15;
 
-var HUD_SCORE_FONT = "36px Futura";
+var HUD_SCORE_FONT = "40px monospace";
 
-var HUD_CHARGE_WIDTH = 200;
+var HUD_CHARGE_WIDTH = 300;
 
 var HUD_CHARGE_MIX = 20;
 
-var HUD_CHARGE_HEIGHT = 20;
+var HUD_CHARGE_HEIGHT = 30;
 
 var HUD_CHARGE_TEXT = "Glitch";
 
@@ -213,14 +213,21 @@ function Drawer(world, root) {
 }
 
 Drawer.prototype.draw = function() {
-    this._updateHud();
+    this._drawHud();
     this.renderer.render();
 };
 
-Drawer.prototype._updateHud = function() {
+Drawer.prototype._drawHud = function() {
     this._hud.ctx.clearRect(0, 0, this._hud.width, this._hud.height);
     this._drawPlayerInfo(this.world.players[0], true);
     this._drawPlayerInfo(this.world.players[1], false);
+    var x = this._hud.width / 2;
+    var y = HUD_PAD + HUD_CHARGE_HEIGHT;
+    this._hud.ctx.fillStyle = "white";
+    this._hud.ctx.font = HUD_SCORE_FONT;
+    this._hud.ctx.textBaseline = "top";
+    this._hud.ctx.textAlign = "center";
+    this._hud.ctx.fillText("-", x, y);
 };
 
 Drawer.prototype._drawPlayerInfo = function(player, left) {
@@ -230,7 +237,7 @@ Drawer.prototype._drawPlayerInfo = function(player, left) {
     this._hud.ctx.textBaseline = "top";
     this._hud.ctx.textAlign = left ? "end" : "start";
     var x = left ? w / 2 - HUD_PAD : w / 2 + HUD_PAD;
-    var y = HUD_PAD;
+    var y = HUD_PAD + HUD_CHARGE_HEIGHT;
     this._hud.ctx.fillText(player.score.toString(), x, y);
     var r = player.charge / GLITCH_MIN_CHARGE;
     var lightColor;
@@ -599,6 +606,14 @@ var SHIFT_KEY = 16;
 
 var ENTER_KEY = 13;
 
+var FORWARD_SLASH_KEY = 191;
+
+var DOT_KEY = 190;
+
+var V_KEY = 86;
+
+var B_KEY = 66;
+
 var ARROW_KEY_MAP = {
     38: Direction.UP,
     40: Direction.DOWN,
@@ -616,12 +631,14 @@ var WSAD_KEY_MAP = {
 var InputAction = {
     MOVE: 1,
     GLITCH_BEGIN: 2,
-    GLITCH_END: 3
+    GLITCH_END: 3,
+    MOVE_BEGIN: 4,
+    MOVE_END: 5
 };
 
-function MoveEvent(source, direction) {
+function MoveEvent(source, direction, start) {
     this.type = EventType.INPUT;
-    this.action = InputAction.MOVE;
+    this.action = start ? InputAction.MOVE_BEGIN : InputAction.MOVE_END;
     this.source = source;
     this.direction = direction;
 }
@@ -635,39 +652,41 @@ function GlitchEvent(source, start) {
 var input = function() {
     var oneKeyMap = {
         move: WSAD_KEY_MAP,
-        glitch: SHIFT_KEY
+        glitch: V_KEY
     };
     var twoKeyMap = {
         move: ARROW_KEY_MAP,
-        glitch: ENTER_KEY
+        glitch: FORWARD_SLASH_KEY
     };
     var sources = [ 0, 1 ];
     var maps = [ oneKeyMap, twoKeyMap ];
     var pending = [];
     var events = [];
-    var glitching = {};
     var isPressed = {};
+    function trapKey(start, key) {
+        for (var source = 0; source <= 1; source++) {
+            if (maps[source].move.hasOwnProperty(key)) {
+                dir = maps[source].move[key];
+                pending.push(new MoveEvent(source, dir, start));
+            }
+            if (key === maps[source].glitch) {
+                pending.push(new GlitchEvent(source, start));
+            }
+        }
+    }
     function init(elt) {
         elt.addEventListener("keydown", function(e) {
             var code = e.keyCode;
             if (!isPressed[code]) {
                 isPressed[code] = true;
-                for (var source = 0; source <= 1; source++) {
-                    if (!glitching[source] && code === maps[source].glitch) {
-                        glitching[source] = true;
-                        pending.push(new GlitchEvent(source, true));
-                    }
-                }
+                trapKey(true, code);
             }
         });
         elt.addEventListener("keyup", function(e) {
             var code = e.keyCode;
-            delete isPressed[code];
-            for (var source = 0; source <= 1; source++) {
-                if (glitching[source] && code === maps[source].glitch) {
-                    glitching[source] = false;
-                    pending.push(new GlitchEvent(source, false));
-                }
+            if (isPressed[code]) {
+                trapKey(false, code);
+                delete isPressed[code];
             }
         });
     }
@@ -677,14 +696,7 @@ var input = function() {
         events.splice(0, events.length);
         Array.prototype.push.apply(events, pending);
         pending.splice(0, pending.length);
-        for (key in isPressed) {
-            for (var source = 0; source <= 1; source++) {
-                if (maps[source].move.hasOwnProperty(key)) {
-                    dir = maps[source].move[key];
-                    events.push(new MoveEvent(source, dir));
-                }
-            }
-        }
+        for (key in isPressed) {}
         return events;
     }
     return {
@@ -4701,15 +4713,15 @@ var DAMPENING = .96;
 
 var DELTA = 1 / 60;
 
-var BALL_MOVE_SMOOTH = .7;
-
 var VEL_ZERO = .05;
 
 var SIDE_MARGIN = 50;
 
 var BALL_SIZE = 50;
 
-var BALL_PUSHBACK = 2e4;
+var BALL_PUSHBACK = 400;
+
+var BALL_MOVE_SMOOTH = .6;
 
 var PLAYER_SPREAD = 1.6;
 
@@ -4721,11 +4733,11 @@ var PLAYER_SIZE = 40;
 
 var PLAYER_FREEZE_DELAY = 100;
 
-var PLAYER_MAX_CHARGE = 500;
+var PLAYER_MAX_CHARGE = 600;
 
-var PLAYER_DISCHARGE_RATIO = 5;
+var PLAYER_DISCHARGE_RATIO = 6;
 
-var PLAYER_DEFEND_HANDICAP = .7;
+var PLAYER_DEFEND_HANDICAP = .5;
 
 var GLITCH_PAD = 10;
 
@@ -4733,9 +4745,9 @@ var GLITCH_ACC = 1e3;
 
 var GLITCH_MIN_CHARGE = PLAYER_MAX_CHARGE / 4;
 
-var GLITCH_DEFEND_THRESHOLD = 7;
+var GLITCH_DEFEND_TAX = PLAYER_MAX_CHARGE / 6;
 
-var GLITCH_DEFEND_INTERVAL = 20;
+var GLITCH_DEFEND_THRESHOLD = 7;
 
 var GLITCH_DEFEND_SPACING = 800;
 
@@ -4790,11 +4802,8 @@ Body.prototype.stop = function() {
     this.acc.clear();
 };
 
-Body.prototype.pushIn = function(dir) {
-    this.acc.fromDirection(dir);
-};
-
 Body.prototype.at = function(x, y) {
+    this.stop();
     this.pos.set(x, y);
     this._reBound();
 };
@@ -4811,7 +4820,6 @@ Body.prototype.update = function() {
     if (this.vel.length() < VEL_ZERO) {
         this.vel.clear();
     }
-    this.acc.clear();
     this._reBound();
 };
 
@@ -4821,6 +4829,7 @@ Body.prototype._reBound = function() {
 
 function Player(left) {
     this.left = left;
+    this.directions = [];
     this.charge = PLAYER_MAX_CHARGE;
     this.body = new Body(PLAYER_SIZE);
     this.score = 0;
@@ -4831,13 +4840,24 @@ function Player(left) {
         color: color,
         size: PLAYER_SIZE,
         bulb: 1,
-        spread: 1.5
+        spread: 1
     };
 }
 
+Player.prototype.moveIn = function(dir) {
+    this.directions.push(dir);
+};
+
+Player.prototype.stopIn = function(dir) {
+    var idx = this.directions.indexOf(dir);
+    if (idx > -1) {
+        this.directions.splice(idx, 1);
+    }
+};
+
 Player.prototype.discharge = function() {
     var handicap = this.state === PlayerState.DEFEND ? PLAYER_DEFEND_HANDICAP : 1;
-    this.charge -= PLAYER_DISCHARGE_RATIO;
+    this.charge -= handicap * PLAYER_DISCHARGE_RATIO;
     return this.charge <= 0;
 };
 
@@ -4852,6 +4872,7 @@ Player.prototype.update = function() {
     if (this.charge < PLAYER_MAX_CHARGE) {
         this.charge += 1;
     }
+    this._getAcc();
     this.body.update();
 };
 
@@ -4863,6 +4884,17 @@ Player.prototype.freeze = function() {
     this.frozen = PLAYER_FREEZE_DELAY;
     this.drawParams.bulb = 0;
     this.drawParams.spread = 0;
+};
+
+Player.prototype._getAcc = function() {
+    this.body.acc.clear();
+    for (var i = 0; i < this.directions.length; i++) {
+        var dir = this.directions[i];
+        this.body.acc.fromDirection(dir);
+    }
+    this.body.acc.normalize();
+    this.body.acc.scale(GLITCH_ACC);
+    return this.body.acc;
 };
 
 var GameState = {
@@ -4878,7 +4910,6 @@ function World(width, height, goalSize) {
         target: null,
         body: new Body(PLAYER_SIZE),
         idx: [ 0, 0 ],
-        last: 0,
         drawParams: GLITCH_DRAW_PARAMS
     };
     this._latticeV = new V();
@@ -4919,14 +4950,17 @@ World.prototype.step = function() {
 World.prototype.handleInput = function(inputEvent) {
     var target = this._getTarget(inputEvent.source);
     switch (inputEvent.action) {
-      case InputAction.MOVE:
-        if (this.state === GameState.FREE) {
-            target.body.pushIn(inputEvent.direction);
-        } else if (this.state === GameState.GLITCH) {
-            if (target === this.glitch.target) {
-                this._moveGlitch(inputEvent.direction);
+      case InputAction.MOVE_BEGIN:
+        target.moveIn(inputEvent.direction);
+        if (this.state === GameState.GLITCH && target === this.glitch.target) {
+            if (target.state === PlayerState.DEFEND) {
+                this._moveLattice(inputEvent.direction);
             }
         }
+        break;
+
+      case InputAction.MOVE_END:
+        target.stopIn(inputEvent.direction);
         break;
 
       case InputAction.GLITCH_BEGIN:
@@ -4968,13 +5002,9 @@ World.prototype._initEntities = function() {
 World.prototype._updatePlayers = function() {
     for (var i = 0; i < this.players.length; i++) {
         var player = this.players[i];
-        var attached = this.ball.attached === player;
-        var acc = attached ? PLAYER_ATTACHED_ACC : PLAYER_ACC;
-        player.body.acc.normalize();
-        player.body.acc.scale(acc);
         player.update();
         if (!this.arena.within(player.body.pos)) {
-            if (attached) {
+            if (this.ball.attached === player) {
                 var pushF = 1;
                 if (Math.abs(player.body.pos.y - this.arena.h / 2) < this.goalSize) {
                     if (!player.left && player.body.pos.x < 0 || player.left && player.body.pos.x > this.arena.w) {
@@ -4982,10 +5012,10 @@ World.prototype._updatePlayers = function() {
                         pushF = 2;
                     }
                 }
-                this.arena.center(this.ball.body.acc);
-                this.ball.body.acc.sub(this.ball.body.pos);
-                this.ball.body.acc.normalize();
-                this.ball.body.acc.scale(pushF * BALL_PUSHBACK);
+                this.arena.center(this.ball.body.vel);
+                this.ball.body.vel.sub(this.ball.body.pos);
+                this.ball.body.vel.normalize();
+                this.ball.body.vel.scale(pushF * BALL_PUSHBACK);
                 this._endPlay();
             }
             this._doSpawn(player);
@@ -5021,15 +5051,8 @@ World.prototype._beginGlitch = function(target) {
     this.glitch.target = target;
     this.glitch.body.from(target.body);
     if (target.state === PlayerState.DEFEND) {
+        target.charge -= GLITCH_DEFEND_TAX;
         this._initLattice(target);
-    }
-};
-
-World.prototype._moveGlitch = function(dir) {
-    if (this.glitch.target.state === PlayerState.ATTACK) {
-        this.glitch.body.pushIn(dir);
-    } else {
-        this._moveLattice(dir);
     }
 };
 
@@ -5041,8 +5064,7 @@ World.prototype._updateGlitch = function() {
     }
     if (target.state === PlayerState.ATTACK) {
         var body = this.glitch.body;
-        body.acc.normalize();
-        body.acc.scale(GLITCH_ACC);
+        body.acc.from(target._getAcc());
         body.update();
     }
 };
@@ -5062,7 +5084,6 @@ World.prototype._endGlitch = function() {
 };
 
 World.prototype._initLattice = function(target) {
-    this.glitch.last = 0;
     var pos = target.body.pos;
     var dX = this.arena.w / 2 - pos.x;
     if (!target.left) {
@@ -5083,9 +5104,6 @@ World.prototype._initLattice = function(target) {
 };
 
 World.prototype._moveLattice = function(dir) {
-    if (this.tick - this.glitch.last < GLITCH_DEFEND_INTERVAL) {
-        return;
-    }
     var idx = this.glitch.idx;
     var n = GLITCH_LATTICE.layers;
     var ent = this.glitch.target;
@@ -5104,7 +5122,6 @@ World.prototype._moveLattice = function(dir) {
     } else {
         throw new Error("unknown case");
     }
-    this.glitch.last = this.tick;
 };
 
 World.prototype._eachLattice = function(left, f) {
@@ -5173,10 +5190,8 @@ World.prototype._doSpawn = function(ent) {
     var space = this.goalSize + SIDE_MARGIN;
     if (ent.left) {
         ent.body.at(space, this.arena.h / 2);
-        ent.body.stop();
     } else {
         ent.body.at(this.arena.w - space, this.arena.h / 2);
-        ent.body.stop();
     }
 };
 
@@ -5185,9 +5200,7 @@ World.prototype._doStart = function(ent) {
     var space = this.goalSize + SIDE_MARGIN;
     if (ent.left) {
         ent.body.at(this.arena.w / 2 - space, this.arena.h / 2);
-        ent.body.stop();
     } else {
         ent.body.at(this.arena.w / 2 + space, this.arena.h / 2);
-        ent.body.stop();
     }
 };
