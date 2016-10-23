@@ -1,14 +1,14 @@
 {
-  "name": "glitchball",
+  "name": "glitchball-web",
   "version": "1.0.0",
-  "description": "Football-esque game with glitching",
+  "description": "Web client for Glitchball",
   "main": "index.js",
   "scripts": {
     "lint": "eslint -c .eslintrc.json src/",
     "dev": "uglifyjs -b -o build/out.js -- src/*.js",
-    "shaders": "node shaders/stringify.js src/shaders.js",
+    "shaders": "node shaders.js ../shaders/ src/shader-strings.js",
     "serve": "http-server build/",
-    "watch": "nodemon -e js,vert,frag --ignore build/ --ignore src/shaders.js --exec 'npm run shaders && npm run dev'",
+    "watch": "nodemon -e js,vert,frag --ignore build/ --ignore src/shader-strings.js --exec 'npm run shaders && npm run dev'",
     "publish": "gh-pages -d build/"
   },
   "keywords": [

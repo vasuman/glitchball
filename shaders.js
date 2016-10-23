@@ -2,10 +2,10 @@ const path = require('path');
 const fs = require('fs');
 
 // get current directory
-var selfDir = path.dirname(__filename);
+var shaderDir = process.argv[2];
 
 function loadFile(name) {
-  return fs.readFileSync(path.join(selfDir, name), 'utf8');
+  return fs.readFileSync(path.join(shaderDir, name), 'utf8');
 }
 
 var shaders = {
@@ -15,7 +15,7 @@ var shaders = {
   arenaFragment: loadFile('arena.frag')
 };
 
-var dstFile = process.argv[2];
+var dstFile = process.argv[3];
 var contents = `
 var SHADERS = ${JSON.stringify(shaders)};
 `;

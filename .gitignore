@@ -5,4 +5,4 @@
 node_modules
 
 build/out.js*
-src/shaders.js
+src/shader-strings.js
