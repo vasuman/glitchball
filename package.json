@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint -c .eslintrc.json src/",
-    "dev": "uglifyjs -b -o build/out.js -- src/*.js",
-    "shaders": "node shaders.js shaders/ src/shader-strings.js",
+    "dev": "uglifyjs -b -o build/out.js -- src/*.js lib/*.js",
+    "shaders": "node shaders.js shaders/ lib/shader-strings.js",
     "serve": "http-server build/",
-    "watch": "nodemon -e js,vert,frag --ignore build/ --ignore src/shader-strings.js --exec 'npm run shaders && npm run dev'",
+    "watch": "nodemon -w src -w shaders -e js,vert,frag --ignore build/ --exec 'npm run shaders && npm run dev'",
     "publish": "gh-pages -d build/"
   },
   "keywords": [

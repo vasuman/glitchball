@@ -3,27 +3,6 @@
 
 var INPUT_DELAY = 200;
 
-var SHIFT_KEY = 16;
-var ENTER_KEY = 13;
-var FORWARD_SLASH_KEY = 191;
-var DOT_KEY = 190;
-var V_KEY = 86;
-var B_KEY = 66;
-
-var ARROW_KEY_MAP = {
-  38: Direction.UP,
-  40: Direction.DOWN,
-  37: Direction.LEFT,
-  39: Direction.RIGHT
-};
-
-var WSAD_KEY_MAP = {
-  87: Direction.UP,
-  83: Direction.DOWN,
-  65: Direction.LEFT,
-  68: Direction.RIGHT
-};
-
 var InputAction = {
   GLITCH_BEGIN: 2,
   GLITCH_END: 3,
@@ -44,17 +23,8 @@ function GlitchEvent(source, start) {
 
 var input = (function() {
 
-  var oneKeyMap = {
-    move: WSAD_KEY_MAP,
-    glitch: V_KEY
-  };
-
-  var twoKeyMap = {
-    move: ARROW_KEY_MAP,
-    glitch: FORWARD_SLASH_KEY
-  };
-
-  var maps = [oneKeyMap, twoKeyMap];
+  var active = [];
+  var maps = [];
   var pending = [];
   var events = [];
   var isPressed = {};
@@ -68,7 +38,7 @@ var input = (function() {
   }
 
   function trapKey(start, key) {
-    for (var source = 0; source <= 1; source++) {
+    for (var source = 0; source < active.length; source++) {
       if (maps[source].move.hasOwnProperty(key)) {
         dir = maps[source].move[key];
         pending.push(new MoveEvent(source, dir, start));
@@ -96,6 +66,11 @@ var input = (function() {
     }));
   }
 
+  function activate(i, map) {
+    active[i] = true;
+    maps[i] = map;
+  }
+
   function poll() {
     var key;
     var dir;
@@ -106,6 +81,7 @@ var input = (function() {
   }
 
   return {
+    activate: activate,
     init: init,
     poll: poll
   };

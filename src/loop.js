@@ -2,13 +2,14 @@
 /* global input, graphics, World */
 
 var loop = (function() {
-  var world, renderer, gameRunning;
+  var world, renderer, gameRunning, agent;
 
   function start() {
     gameRunning = true;
     world = new World(3600, 2400, 200);
     world.init();
     renderer = graphics.init(world);
+    agent = new Agent();
     tick();
 
     // FIXME!
