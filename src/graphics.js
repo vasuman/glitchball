@@ -25,6 +25,13 @@ var HUD_CHARGE_FONT = '12px sans-serif';
 var ARENA_LINE_COLOR = [0.2, 0.2, 0.8, 0.5];
 var ARENA_LATTICE_COLOR = [0.4, 0.4, 0.8, 0.5];
 
+var GLITCH_DRAW_PARAMS = {
+      color: [0.8, 0.8, 0.8, 1.0],
+      size: 40,
+      bulb: 1,
+      spread: 1.4
+};
+
 var graphics = (function() {
   var root;
 
@@ -163,13 +170,14 @@ PerspectiveRenderer.prototype.render = function() {
   this._drawItem(this.world.players[1]);
   this._drawItem(this.world.ball);
   if (target) {
+    var pos;
     if (target.state == PlayerState.ATTACK) {
-      this._drawItem(this.world.glitch);
+      pos = this.world.glitch.body.pos;
     } else {
       var idx = this.world.glitch.idx;
-      this._drawSpike(GLITCH_DRAW_PARAMS,
-        this.world._latticePoint(idx[0], idx[1], target.left));
+      pos = this.world._latticePoint(idx[0], idx[1], target.left);
     }
+    this._drawSpike(GLITCH_DRAW_PARAMS, pos);
   }
 }
 

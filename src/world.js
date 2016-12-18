@@ -23,13 +23,6 @@ var GLITCH_DEFEND_THRESHOLD = 7;
 var GLITCH_DEFEND_SPACING = 800;
 var GLITCH_SMOOTH_MOVE = 0.9;
 
-var GLITCH_DRAW_PARAMS = {
-      color: [1, 1, 1, 1.0],
-      size: PLAYER_SIZE,
-      bulb: 1,
-      spread: 1.4
-};
-
 var GLITCH_LATTICE = {
   layers: 4,
   spread: 60,
@@ -91,7 +84,7 @@ Body.prototype._reBound = function() {
 
 function Player(left) {
   this.left = left;
-  this.directions = [];
+  this._directions = [];
   this.charge = PLAYER_MAX_CHARGE;
   this.body = new Body(PLAYER_SIZE);
   this.score = 0;
@@ -107,13 +100,13 @@ function Player(left) {
 }
 
 Player.prototype.moveIn = function(dir) {
-  this.directions.push(dir);
+  this._directions.push(dir);
 }
 
 Player.prototype.stopIn = function(dir) {
-  var idx = this.directions.indexOf(dir);
+  var idx = this._directions.indexOf(dir);
   if (idx > -1) {
-    this.directions.splice(idx, 1);
+    this._directions.splice(idx, 1);
   }
 }
 
@@ -152,8 +145,8 @@ Player.prototype.freeze = function() {
 
 Player.prototype._calcAcc = function() {
   this.body.acc.clear();
-  for (var i = 0; i < this.directions.length; i++) {
-    var dir = this.directions[i];
+  for (var i = 0; i < this._directions.length; i++) {
+    var dir = this._directions[i];
     this.body.acc.fromDirection(dir);
   }
   this.body.acc.normalize();
